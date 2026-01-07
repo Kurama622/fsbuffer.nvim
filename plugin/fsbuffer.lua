@@ -1,0 +1,5 @@
+local fsb = require("fsbuffer")
+fsb:set_cfg()
+vim.keymap.set("n", "<leader>fs", function()
+	fsb:create()
+end)
