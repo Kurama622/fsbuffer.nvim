@@ -6,9 +6,12 @@ local fsb = {
 		height_ratio = 0.5,
 	},
 	lines = {},
-	cwd = "",
+	cwd = vim.uv.cwd(),
 	name_maxwidth = 0,
 	user_maxwidth = 0,
+	mode = "normal",
+	buf = nil,
+	win = nil,
 }
 local format = require("fsbuffer.format")
 
@@ -42,7 +45,7 @@ function fsb:scan(cwd)
 			self.user_maxwidth = math.max(self.user_maxwidth, vim.api.nvim_strwidth(username))
 
 			table.insert(self.lines, {
-				["name"] = name,
+				["name"] = t == "directory" and name .. "/" or name,
 				["type"] = t,
 				["mode"] = format.permissions(stat.mode),
 				["size"] = format.size(stat.size),
@@ -54,11 +57,8 @@ function fsb:scan(cwd)
 end
 
 function fsb:create()
-	self.cwd = vim.uv.cwd()
-	self:scan(self.cwd)
-
-	local buf = vim.api.nvim_create_buf(false, true)
-	local win = vim.api.nvim_open_win(buf, true, {
+	self.buf = vim.api.nvim_create_buf(false, true)
+	self.win = vim.api.nvim_open_win(self.buf, true, {
 		relative = self.cfg.relative,
 		border = self.cfg.border,
 		row = self.cfg.row,
@@ -67,16 +67,29 @@ function fsb:create()
 		width = self.cfg.width,
 	})
 
-	vim.wo[win].number = false
-	vim.wo[win].relativenumber = false
-	vim.wo[win].signcolumn = "no"
-	vim.wo[win].spell = false
-	vim.bo[buf].filetype = "fsbuffer"
+	vim.wo[self.win].number = false
+	vim.wo[self.win].relativenumber = false
+	vim.wo[self.win].signcolumn = "no"
+	vim.wo[self.win].spell = false
+	vim.bo[self.buf].filetype = "fsbuffer"
 
-	vim.api.nvim_buf_set_lines(buf, 0, 1, true, { self.cwd })
+	vim.cmd.syntax('match FsDir "[^[:space:]]\\+/"')
+	self:render()
+end
+
+function fsb:render()
+	self:scan(self.cwd)
+	-- render current path
+	local path = ("~/%s/"):format(vim.fs.relpath(vim.env.HOME, self.cwd))
+	vim.api.nvim_buf_set_lines(self.buf, 0, 1, false, { path })
+	vim.api.nvim_buf_set_extmark(self.buf, ns_id, 0, 0, {
+		end_col = vim.api.nvim_strwidth(path),
+		hl_group = "FsTitle",
+	})
+
 	for row, line in ipairs(self.lines) do
 		vim.api.nvim_buf_set_lines(
-			buf,
+			self.buf,
 			row,
 			row,
 			false,
@@ -84,12 +97,12 @@ function fsb:create()
 		)
 
 		local texts = {
-			{ ("%-11s "):format(line.mode), "comment" },
-			{ ("%-" .. (self.user_maxwidth + 2) .. "s "):format(line.username), "keyword" },
-			{ ("%-10s "):format(line.size), "string" },
-			{ ("%-20s "):format(line.date), "title" },
+			{ ("%-11s "):format(line.mode), "FsMode" },
+			{ ("%-" .. (self.user_maxwidth + 2) .. "s "):format(line.username), "FsUser" },
+			{ ("%-10s "):format(line.size), "FsSize" },
+			{ ("%-20s "):format(line.date), "FsDate" },
 		}
-		vim.api.nvim_buf_set_extmark(buf, ns_id, row, 0, {
+		vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
 			hl_mode = "combine",
 			virt_text = texts,
 			right_gravity = false,
