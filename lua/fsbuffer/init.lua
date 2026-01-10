@@ -195,6 +195,7 @@ function fsb:set_keymaps()
 
 	vim.keymap.set("n", "/", function()
 		self.mode = "c"
+		self.action = "normal"
 		vim.api.nvim_win_set_cursor(0, { 1, 0 })
 		vim.api.nvim_feedkeys("A", "n", false)
 	end, { noremap = true, buffer = true })
