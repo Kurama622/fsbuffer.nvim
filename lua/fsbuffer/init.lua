@@ -111,7 +111,6 @@ function fsb:update(root_dir, lines)
 
 	if root_dir then
 		self.cwd = root_dir
-		-- vim.print("set cwd: ", self.cwd)
 		self:scan(root_dir)
 		-- render current path
 		local path = ("~/%s/"):format(vim.fs.relpath(vim.env.HOME, root_dir))
@@ -190,6 +189,10 @@ function fsb:set_keymaps()
 		return "k"
 	end, { noremap = true, buffer = true, expr = true })
 
+	vim.keymap.set("n", "<backspace>", function()
+		self:update(vim.fs.dirname(self.cwd))
+	end, { noremap = true, buffer = true })
+
 	vim.keymap.set("n", "/", function()
 		self.mode = "c"
 		vim.api.nvim_win_set_cursor(0, { 1, 0 })
@@ -204,7 +207,7 @@ function fsb:set_keymaps()
 				idx = self.lines_idx_map[row - 1]
 			end
 			if self.lines[idx].type == "directory" then
-				self:update(self.cwd .. "/" .. self.lines[idx].name)
+				self:update(self.cwd .. "/" .. self.lines[idx].name:gsub("/+$", ""))
 			elseif self.lines[idx].type == "file" then
 				vim.api.nvim_win_close(self.win, true)
 				vim.cmd.edit(self.cwd .. "/" .. self.lines[idx].name)
@@ -266,7 +269,7 @@ function fsb:watch()
 				local stat = vim.uv.fs_stat(search_path)
 				if stat then
 					if stat then
-						self:update(search_path)
+						self:update((search_path:gsub("/+$", "")))
 					end
 				elseif #text >= #path then
 					local search_words = text:gsub(path, "")
