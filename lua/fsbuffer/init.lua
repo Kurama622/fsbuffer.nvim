@@ -102,58 +102,54 @@ function fsb:update_root_dir_hightlight(path)
 end
 
 function fsb:update(root_dir, lines)
-	vim.schedule(function()
-		-- clear buf text and extmarks
-		vim.api.nvim_buf_set_lines(self.buf, 1, -1, false, {})
-		local extmarks = vim.api.nvim_buf_get_extmarks(self.buf, ns_id, 0, -1, {})
-		for _, mark in ipairs(extmarks) do
-			vim.api.nvim_buf_del_extmark(self.buf, ns_id, mark[1])
-		end
+	-- clear buf text and extmarks
+	vim.api.nvim_buf_set_lines(self.buf, 1, -1, false, {})
+	local extmarks = vim.api.nvim_buf_get_extmarks(self.buf, ns_id, 0, -1, {})
+	for _, mark in ipairs(extmarks) do
+		vim.api.nvim_buf_del_extmark(self.buf, ns_id, mark[1])
+	end
 
-		if root_dir then
-			self.cwd = root_dir
-			-- vim.print("set cwd: ", self.cwd)
-			self:scan(root_dir)
-			-- render current path
-			local path = ("~/%s/"):format(vim.fs.relpath(vim.env.HOME, root_dir))
-			vim.api.nvim_buf_set_lines(self.buf, 0, 1, false, { path })
-			self:update_root_dir_hightlight(path)
-		end
+	if root_dir then
+		self.cwd = root_dir
+		-- vim.print("set cwd: ", self.cwd)
+		self:scan(root_dir)
+		-- render current path
+		local path = ("~/%s/"):format(vim.fs.relpath(vim.env.HOME, root_dir))
+		vim.api.nvim_buf_set_lines(self.buf, 0, 1, false, { path })
+		self:update_root_dir_hightlight(path)
+	end
 
-		lines = lines or self.lines
-		for row, line in ipairs(lines) do
-			vim.api.nvim_buf_set_lines(
-				self.buf,
-				row,
-				row,
-				false,
-				{ ("%-" .. (self.name_maxwidth + 2) .. "s"):format(line.name) }
-			)
+	lines = lines or self.lines
+	for row, line in ipairs(lines) do
+		vim.api.nvim_buf_set_lines(
+			self.buf,
+			row,
+			row,
+			false,
+			{ ("%-" .. (self.name_maxwidth + 2) .. "s"):format(line.name) }
+		)
 
-			local texts = {
-				{ ("%-11s "):format(line.mode), "FsMode" },
-				{ ("%-" .. (self.user_maxwidth + 2) .. "s "):format(line.username), "FsUser" },
-				{ ("%-10s "):format(line.size), "FsSize" },
-				{ ("%-20s "):format(line.date), "FsDate" },
-			}
-			vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
-				hl_mode = "combine",
-				virt_text = texts,
-				right_gravity = false,
-			})
-		end
-	end)
+		local texts = {
+			{ ("%-11s "):format(line.mode), "FsMode" },
+			{ ("%-" .. (self.user_maxwidth + 2) .. "s "):format(line.username), "FsUser" },
+			{ ("%-10s "):format(line.size), "FsSize" },
+			{ ("%-20s "):format(line.date), "FsDate" },
+		}
+		vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
+			hl_mode = "combine",
+			virt_text = texts,
+			right_gravity = false,
+		})
+	end
 end
 function fsb:render(dir)
 	dir = dir or vim.uv.cwd()
 	self:update(dir)
 
-	vim.schedule(function()
-		local row = vim.api.nvim_win_get_cursor(0)[1]
-		if row == 1 and #self.lines > 0 then
-			vim.api.nvim_win_set_cursor(self.win, { 2, 0 })
-		end
-	end)
+	local row = vim.api.nvim_win_get_cursor(0)[1]
+	if row == 1 and #self.lines > 0 then
+		vim.api.nvim_win_set_cursor(self.win, { 2, 0 })
+	end
 end
 
 function fsb:set_keymaps()
@@ -245,7 +241,9 @@ function fsb:set_keymaps()
 	vim.keymap.set({ "x", "n" }, "p", function()
 		if self.action == "cut" then
 			self.action = "move"
-			actions:rename_and_render()
+			vim.schedule(function()
+				actions:rename_and_render()
+			end)
 		elseif self.action == "yank" then
 			self.action = "paste"
 		end
@@ -257,42 +255,40 @@ function fsb:watch()
 	vim.api.nvim_create_autocmd("TextChangedI", {
 		buffer = self.buf,
 		callback = function()
-			vim.schedule(function()
-				-- search mode
-				if self.mode == "c" then
-					-- clear idx map
-					self.lines_idx_map = nil
-					local path = ("~/%s/"):format(vim.fs.relpath(vim.env.HOME, self.cwd))
-					local text = vim.api.nvim_buf_get_lines(self.buf, 0, 1, true)[1]
+			-- search mode
+			if self.mode == "c" then
+				-- clear idx map
+				self.lines_idx_map = nil
+				local path = ("~/%s/"):format(vim.fs.relpath(vim.env.HOME, self.cwd))
+				local text = vim.api.nvim_buf_get_lines(self.buf, 0, 1, true)[1]
 
-					local search_path = (text:gsub("~", vim.env.HOME))
-					local stat = vim.uv.fs_stat(search_path)
+				local search_path = (text:gsub("~", vim.env.HOME))
+				local stat = vim.uv.fs_stat(search_path)
+				if stat then
 					if stat then
-						if stat then
-							self:update(search_path)
-						end
-					elseif #text >= #path then
-						local search_words = text:gsub(path, "")
-						local total_valid_idx, total_idx = 1, 1
-						self.lines_idx_map = {}
-
-						self:update(
-							nil,
-							vim.tbl_filter(function(item)
-								if string.find(item.name, search_words) then
-									self.lines_idx_map[total_valid_idx] = total_idx
-									total_valid_idx = total_valid_idx + 1
-									total_idx = total_idx + 1
-									return true
-								end
-
-								total_idx = total_idx + 1
-								return false
-							end, self.lines)
-						)
+						self:update(search_path)
 					end
+				elseif #text >= #path then
+					local search_words = text:gsub(path, "")
+					local total_valid_idx, total_idx = 1, 1
+					self.lines_idx_map = {}
+
+					self:update(
+						nil,
+						vim.tbl_filter(function(item)
+							if string.find(item.name, search_words) then
+								self.lines_idx_map[total_valid_idx] = total_idx
+								total_valid_idx = total_valid_idx + 1
+								total_idx = total_idx + 1
+								return true
+							end
+
+							total_idx = total_idx + 1
+							return false
+						end, self.lines)
+					)
 				end
-			end)
+			end
 		end,
 	})
 	vim.api.nvim_create_autocmd("CursorMoved", {
@@ -330,15 +326,13 @@ function fsb:watch()
 				return
 			end
 			if self.mode ~= "\22" then
-				vim.schedule(function()
-					-- update root dir
-					local path = ("~/%s/"):format(vim.fs.relpath(vim.env.HOME, self.cwd))
-					local text = vim.api.nvim_buf_get_lines(self.buf, 0, 1, true)[1]
-					if #text < #path then
-						vim.api.nvim_buf_set_text(0, 0, 0, 0, -1, { path })
-					end
-					self:update_root_dir_hightlight(path)
-				end)
+				-- update root dir
+				local path = ("~/%s/"):format(vim.fs.relpath(vim.env.HOME, self.cwd))
+				local text = vim.api.nvim_buf_get_lines(self.buf, 0, 1, true)[1]
+				if #text < #path then
+					vim.api.nvim_buf_set_text(0, 0, 0, 0, -1, { path })
+				end
+				self:update_root_dir_hightlight(path)
 
 				-- create
 				if self.action == "add" then

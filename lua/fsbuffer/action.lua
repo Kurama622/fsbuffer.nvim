@@ -42,7 +42,6 @@ end
 
 function actions:rename_and_render()
 	for _, item in ipairs(self.cut_list) do
-		vim.print(self.cwd)
 		vim.uv.fs_rename(item.path .. "/" .. item.name, self.cwd .. "/" .. item.name)
 	end
 	self.cut_list = {}
