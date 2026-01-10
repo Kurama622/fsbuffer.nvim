@@ -47,4 +47,16 @@ function actions:rename_and_render()
 	self.cut_list = {}
 	self:update(self.cwd)
 end
+
+function actions:remove_and_render()
+	for _, item in ipairs(self.cut_list) do
+		if item.type == "directory" then
+			vim.uv.fs_rmdir(item.path .. "/" .. item.name)
+		elseif item.type == "file" then
+			vim.uv.fs_unlink(item.path .. "/" .. item.name)
+		end
+	end
+
+	self.cut_list = {}
+end
 return actions

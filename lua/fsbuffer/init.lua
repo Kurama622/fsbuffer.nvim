@@ -87,7 +87,11 @@ function fsb:create()
 	vim.wo[self.win].signcolumn = "no"
 	vim.wo[self.win].spell = false
 	vim.bo[self.buf].filetype = "fsbuffer"
+	vim.bo[self.buf].buftype = "acwrite"
+	vim.bo[self.buf].bufhidden = "wipe"
+	vim.bo[self.buf].swapfile = false
 
+	vim.api.nvim_buf_set_name(self.buf, "fsbuffer")
 	vim.cmd.syntax('match FsDir "[^[:space:]]\\+/"')
 	self:render()
 	self:watch()
@@ -139,6 +143,10 @@ function fsb:update(root_dir, lines)
 			virt_text = texts,
 			right_gravity = false,
 		})
+	end
+
+	if vim.tbl_isempty(self.cut_list) then
+		vim.bo[self.buf].modified = false
 	end
 end
 function fsb:render(dir)
@@ -237,7 +245,10 @@ function fsb:set_keymaps()
 			start_row, end_row = end_row, start_row
 		end
 		for i = start_row, end_row, 1 do
-			table.insert(self.cut_list, { path = self.cwd, name = self.lines[i - 1].name })
+			table.insert(
+				self.cut_list,
+				{ path = self.cwd, name = self.lines[i - 1].name, ["type"] = self.lines[i - 1].type }
+			)
 		end
 		return "d"
 	end, { noremap = true, buffer = true, expr = true })
@@ -341,7 +352,6 @@ function fsb:watch()
 				-- create
 				if self.action == "add" then
 					actions:create_and_render()
-				elseif self.action == "cut" then
 				end
 				-- local row = vim.api.nvim_win_get_cursor(0)[1]
 				-- vim.print(vim.fn.getline(row))
@@ -355,6 +365,19 @@ function fsb:watch()
 		buffer = self.buf,
 		callback = function()
 			self.edit_range = { start_row = nil, end_row = nil }
+			if self.action == "cut" then
+				actions:remove_and_render()
+			end
+		end,
+	})
+
+	vim.api.nvim_create_autocmd({ "QuitPre", "BufWriteCmd" }, {
+		pattern = "fsbuffer",
+		callback = function()
+			if self.action == "cut" then
+				actions:remove_and_render()
+			end
+			vim.bo[self.buf].modified = false
 		end,
 	})
 end
