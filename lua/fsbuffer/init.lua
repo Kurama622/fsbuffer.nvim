@@ -11,9 +11,10 @@ local fsb = {
 	name_maxwidth = 0,
 	user_maxwidth = 0,
 	cut_list = {},
+	yank_list = {},
 	mode = "n",
 	action = "normal",
-	edit_range = { start_row = nil, end_row = nil },
+	edit = { range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {} },
 	buf = nil,
 	win = nil,
 }
@@ -163,13 +164,21 @@ function fsb:set_keymaps()
 	-- visual block
 	vim.keymap.set("n", "<C-v>", function()
 		self.mode = "\22"
-		vim.print("set mode: \22")
 		return "<C-v>"
+	end, { noremap = true, buffer = true, expr = true })
+
+	vim.keymap.set("n", "v", function()
+		self.mode = "v"
+		return "v"
+	end, { noremap = true, buffer = true, expr = true })
+
+	vim.keymap.set("n", "V", function()
+		self.mode = "V"
+		return "V"
 	end, { noremap = true, buffer = true, expr = true })
 
 	-- return normal
 	vim.keymap.set({ "v", "i" }, "<esc>", function()
-		self.mode = "n"
 		return "<esc>"
 	end, { noremap = true, buffer = true, expr = true })
 
@@ -238,30 +247,57 @@ function fsb:set_keymaps()
 	})
 
 	vim.keymap.set({ "x", "n" }, "d", function()
-		self.action = "cut"
-		local start_row = vim.fn.getpos("v")[2]
-		local end_row = vim.fn.getpos(".")[2]
-		if start_row > end_row then
-			start_row, end_row = end_row, start_row
+		local mode = vim.api.nvim_get_mode().mode
+		if mode == "n" or mode == "V" then
+			self.action = "cut"
+			local start_row, end_row = actions:range()
+			for i = start_row, end_row, 1 do
+				table.insert(
+					self.cut_list,
+					{ path = self.cwd, name = self.lines[i - 1].name, ["type"] = self.lines[i - 1].type }
+				)
+			end
+
+			return "d"
+		else
+			vim.schedule(function()
+				vim.cmd.Edit()
+				for idx = self.edit.range.start_row, self.edit.range.end_row, 1 do
+					vim.api.nvim_buf_set_text(
+						self.buf,
+						idx - 1,
+						self.edit.range.start_col - 1,
+						idx - 1,
+						self.edit.range.end_col,
+						{}
+					)
+				end
+				vim.cmd.Rename()
+				local esc = vim.api.nvim_replace_termcodes("<esc>", true, false, true)
+				vim.api.nvim_feedkeys(esc, "n", false)
+			end)
+			return ""
 		end
+	end, { noremap = true, buffer = true, expr = true })
+
+	vim.keymap.set({ "x", "n" }, "y", function()
+		self.action = "yank"
+		local start_row, end_row = actions:range()
 		for i = start_row, end_row, 1 do
 			table.insert(
-				self.cut_list,
+				self.yank_list,
 				{ path = self.cwd, name = self.lines[i - 1].name, ["type"] = self.lines[i - 1].type }
 			)
 		end
-		return "d"
+		return "y"
 	end, { noremap = true, buffer = true, expr = true })
 
 	vim.keymap.set({ "x", "n" }, "p", function()
-		if self.action == "cut" then
-			self.action = "move"
-			vim.schedule(function()
-				actions:rename_and_render()
-			end)
-		elseif self.action == "yank" then
-			self.action = "paste"
-		end
+		self.action = "paste"
+		vim.schedule(function()
+			actions:rename_and_render()
+			actions:paste_and_render()
+		end)
 		return "p"
 	end, { noremap = true, buffer = true, expr = true })
 end
@@ -325,13 +361,12 @@ function fsb:watch()
 			if self.mode == "c" then
 				return
 			end
-			if self.mode ~= "\22" then
-				-- local row = vim.api.nvim_win_get_cursor(0)[1]
 
-				-- vim.print(self.lines[row - 1].name)
-				-- vim.print(vim.api.nvim_buf_get_lines(self.buf, row - 1, row, true))
-				-- vim.print(vim.fn.getline(row))
+			-- visual block需要特殊处理
+			if self.mode ~= "\22" then
+				self.mode = "i"
 			end
+			vim.cmd.Edit()
 		end,
 	})
 	vim.api.nvim_create_autocmd("InsertLeave", {
@@ -340,43 +375,89 @@ function fsb:watch()
 			if self.mode == "c" then
 				return
 			end
-			if self.mode ~= "\22" then
-				-- update root dir
-				local path = ("~/%s/"):format(vim.fs.relpath(vim.env.HOME, self.cwd))
-				local text = vim.api.nvim_buf_get_lines(self.buf, 0, 1, true)[1]
-				if #text < #path then
-					vim.api.nvim_buf_set_text(0, 0, 0, 0, -1, { path })
-				end
-				self:update_root_dir_hightlight(path)
 
-				-- create
-				if self.action == "add" then
-					actions:create_and_render()
-				end
-				-- local row = vim.api.nvim_win_get_cursor(0)[1]
-				-- vim.print(vim.fn.getline(row))
+			vim.cmd.Rename()
+			self.mode = "n"
+			-- update root dir
+			local path = ("~/%s/"):format(vim.fs.relpath(vim.env.HOME, self.cwd))
+			local text = vim.api.nvim_buf_get_lines(self.buf, 0, 1, true)[1]
+			if #text < #path then
+				vim.api.nvim_buf_set_text(0, 0, 0, 0, -1, { path })
+			end
+			self:update_root_dir_hightlight(path)
 
-				-- vim.print(self.lines[row - 1].name)
-				-- vim.print(vim.api.nvim_buf_get_lines(self.buf, row - 1, row, true))
+			-- create
+			if self.action == "add" then
+				actions:create_and_render()
 			end
 		end,
 	})
+
+	vim.api.nvim_buf_create_user_command(self.buf, "Edit", function()
+		if self.action == "add" then
+			return
+		end
+		local mode = vim.api.nvim_get_mode().mode
+		if mode == "\22" or mode == "v" or mode == "V" or self.mode == "i" then
+			self.edit.range.start_row, self.edit.range.end_row, self.edit.range.start_col, self.edit.range.end_col =
+				actions:range()
+		else
+			self.edit.range.start_row, self.edit.range.end_row, self.edit.range.start_col, self.edit.range.end_col =
+				actions:visual_range()
+		end
+
+		for i = self.edit.range.start_row, self.edit.range.end_row, 1 do
+			table.insert(self.edit.texts, self.lines[i - 1].name)
+		end
+	end, {})
+
+	vim.api.nvim_buf_create_user_command(self.buf, "Rename", function()
+		if not vim.tbl_isempty(self.edit.texts) then
+			if self.mode == "\22" then
+				vim.api.nvim_create_autocmd("TextChanged", {
+					once = true,
+					callback = function()
+						local new_texts = vim.api.nvim_buf_get_lines(
+							self.buf,
+							self.edit.range.start_row - 1,
+							self.edit.range.end_row,
+							true
+						)
+
+						for i, raw_text in ipairs(self.edit.texts) do
+							actions:rename((raw_text:gsub("%s+$", "")), (new_texts[i]:gsub("%s+$", "")))
+						end
+						self.edit =
+							{ range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {} }
+						self:update(self.cwd)
+						self.mode = "n"
+					end,
+				})
+			else
+				local new_texts =
+					vim.api.nvim_buf_get_lines(self.buf, self.edit.range.start_row - 1, self.edit.range.end_row, true)
+				for i, raw_text in ipairs(self.edit.texts) do
+					actions:rename((raw_text:gsub("%s+$", "")), (new_texts[i]:gsub("%s+$", "")))
+				end
+				self.edit = { range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {} }
+				self:update(self.cwd)
+				self.mode = "n"
+			end
+		end
+	end, {})
+
 	vim.api.nvim_create_autocmd("WinClosed", {
 		buffer = self.buf,
 		callback = function()
-			self.edit_range = { start_row = nil, end_row = nil }
-			if self.action == "cut" then
-				actions:remove_and_render()
-			end
+			self.edit = { range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {} }
+			actions:remove_and_render()
 		end,
 	})
 
 	vim.api.nvim_create_autocmd({ "QuitPre", "BufWriteCmd" }, {
 		pattern = "fsbuffer",
 		callback = function()
-			if self.action == "cut" then
-				actions:remove_and_render()
-			end
+			actions:remove_and_render()
 			vim.bo[self.buf].modified = false
 		end,
 	})
