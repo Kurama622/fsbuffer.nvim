@@ -1,7 +1,8 @@
 if vim.g.loaded_fsb then
 	return
 end
-
+vim.g.loaded_netrw = 1
+vim.g.loaded_netrwPlugin = 1
 vim.g.loaded_fsb = true
 
 local highlight = {

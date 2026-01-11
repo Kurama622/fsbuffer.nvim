@@ -261,6 +261,10 @@ function fsb:set_keymaps()
 	vim.keymap.set({ "x", "n" }, "d", function()
 		local mode = vim.api.nvim_get_mode().mode
 		if mode == "n" or mode == "V" then
+			if not vim.tbl_isempty(self.cut_list) then
+				vim.print("Unprocessed files or folders:", self.cut_list)
+				return
+			end
 			self.action = "cut"
 			local start_row, end_row = actions:range()
 			for i = start_row, end_row, 1 do
@@ -308,8 +312,8 @@ function fsb:set_keymaps()
 	vim.keymap.set({ "x", "n" }, "p", function()
 		self.action = "paste"
 		vim.schedule(function()
-			actions:rename_and_render()
-			actions:paste_and_render()
+			actions:rename_all(self.cut_list)
+			actions:paste_all(self.yank_list)
 		end)
 		return "p"
 	end, { noremap = true, buffer = true, expr = true })
@@ -454,14 +458,17 @@ function fsb:watch()
 						)
 
 						for i, raw_text in ipairs(self.edit.texts) do
-							actions:rename((raw_text:gsub("%s+$", "")), (new_texts[i]:gsub("%s+$", "")))
+							actions:rename(
+								i,
+								self.cwd .. "/" .. (raw_text:gsub("%s+$", "")),
+								self.cwd .. "/" .. (new_texts[i]:gsub("%s+$", ""))
+							)
 						end
 						self.edit = {
 							range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil },
 							texts = {},
 							modified = false,
 						}
-						self:update(self.cwd)
 						self.mode = "n"
 					end,
 				})
@@ -472,7 +479,11 @@ function fsb:watch()
 				local new_texts =
 					vim.api.nvim_buf_get_lines(self.buf, self.edit.range.start_row - 1, self.edit.range.end_row, true)
 				for i, raw_text in ipairs(self.edit.texts) do
-					actions:rename((raw_text:gsub("%s+$", "")), (new_texts[i]:gsub("%s+$", "")))
+					actions:rename(
+						i,
+						self.cwd .. "/" .. (raw_text:gsub("%s+$", "")),
+						self.cwd .. "/" .. (new_texts[i]:gsub("%s+$", ""))
+					)
 				end
 				self.edit = {
 					range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil },
@@ -494,14 +505,14 @@ function fsb:watch()
 				modified = false,
 			}
 			self.exist = false
-			actions:remove_and_render()
+			actions:remove_all(self.cut_list)
 		end,
 	})
 
 	vim.api.nvim_create_autocmd({ "QuitPre", "BufWriteCmd" }, {
 		pattern = "fsbuffer",
 		callback = function()
-			actions:remove_and_render()
+			actions:remove_all(self.cut_list)
 			vim.bo[self.buf].modified = false
 		end,
 	})

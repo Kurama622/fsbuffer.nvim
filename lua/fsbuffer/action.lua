@@ -68,24 +68,28 @@ function actions:create_and_render()
 	self:update(self.cwd)
 end
 
-function actions:rename(text, new_text)
-	vim.uv.fs_rename(self.cwd .. "/" .. text, self.cwd .. "/" .. new_text, function(err)
+function actions:rename(i, text, new_text)
+	vim.uv.fs_rename(text, new_text, function(err)
 		if err then
 			vim.print(err)
+		end
+		table.remove(self.cut_list, i)
+		if vim.tbl_isempty(self.cut_list) then
+			vim.schedule(function()
+				self:update(self.cwd)
+			end)
 		end
 	end)
 end
 
-function actions:rename_and_render()
-	for _, item in ipairs(self.cut_list) do
-		vim.uv.fs_rename(item.path .. "/" .. item.name, self.cwd .. "/" .. item.name)
+function actions:rename_all(t)
+	for i, item in ipairs(t) do
+		self:rename(i, item.path .. "/" .. item.name, self.cwd .. "/" .. item.name)
 	end
-	self.cut_list = {}
-	self:update(self.cwd)
 end
 
-function actions:remove_and_render()
-	for _, item in ipairs(self.cut_list) do
+function actions:remove_all(t)
+	for i, item in ipairs(t) do
 		if item.type == "directory" then
 			local function remove_dir(dir)
 				vim.uv.fs_rmdir(dir, function(err)
@@ -111,24 +115,39 @@ function actions:remove_and_render()
 						end
 					end
 					remove_dir(dir)
+					table.remove(t, i)
+					if vim.tbl_isempty(t) then
+						vim.schedule(function()
+							self:update(self.cwd)
+						end)
+					end
 				end)
 			end
 			remove_dir(item.path .. "/" .. item.name)
 		elseif item.type == "file" then
-			vim.uv.fs_unlink(item.path .. "/" .. item.name)
+			vim.uv.fs_unlink(item.path .. "/" .. item.name, function(err)
+				if err then
+					vim.print(err)
+				end
+				table.remove(t, i)
+				if vim.tbl_isempty(t) then
+					vim.schedule(function()
+						self:update(self.cwd)
+					end)
+				end
+			end)
 		end
 	end
-
-	self.cut_list = {}
-	self:update(self.cwd)
 end
 
-function actions:paste_and_render()
-	for _, item in ipairs(self.yank_list) do
+function actions:paste_all(t)
+	for _, item in ipairs(t) do
+		local src = item.path .. "/" .. item.name
+		local desc = self.cwd .. "/" .. item.name
+		if src == desc then
+			desc = self.cwd .. "/_" .. item.name
+		end
 		if item.type == "directory" then
-			local src = item.path .. "/" .. item.name
-			local desc = self.cwd .. "/" .. item.name
-
 			local function copy_dir(source, dest)
 				local stat = vim.uv.fs_stat(source)
 				if not stat then
@@ -161,11 +180,12 @@ function actions:paste_and_render()
 			end
 			copy_dir(src, desc)
 		elseif item.type == "file" then
-			vim.uv.fs_copyfile(item.path .. "/" .. item.name, self.cwd .. "/" .. item.name)
+			vim.uv.fs_copyfile(src, desc)
 		end
 	end
 
 	self.yank_list = {}
 	self:update(self.cwd)
 end
+
 return actions
