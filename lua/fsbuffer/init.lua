@@ -5,6 +5,7 @@ local fsb = {
 		width_ratio = 0.5,
 		height_ratio = 0.5,
 	},
+	exist = false,
 	lines = {},
 	cwd = nil,
 	lines_idx_map = nil,
@@ -14,7 +15,7 @@ local fsb = {
 	yank_list = {},
 	mode = "n",
 	action = "normal",
-	edit = { range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {} },
+	edit = { range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {}, modified = false },
 	buf = nil,
 	win = nil,
 }
@@ -35,6 +36,10 @@ function fsb:set_cfg()
 	self.cfg.width = math.floor(vim.o.columns * self.cfg.width_ratio)
 	self.cfg.row = math.floor((vim.o.lines - self.cfg.height) / 2)
 	self.cfg.col = math.floor((vim.o.columns - self.cfg.width) / 2)
+end
+function fsb:close()
+	vim.api.nvim_win_close(self.win, true)
+	self.exist = false
 end
 
 function fsb:scan(cwd)
@@ -72,7 +77,11 @@ function fsb:scan(cwd)
 	end
 end
 
-function fsb:create()
+function fsb:toggle(dir)
+	if self.exist then
+		self:close()
+		return
+	end
 	self.buf = vim.api.nvim_create_buf(false, true)
 	self.win = vim.api.nvim_open_win(self.buf, true, {
 		relative = self.cfg.relative,
@@ -94,9 +103,11 @@ function fsb:create()
 
 	vim.api.nvim_buf_set_name(self.buf, "fsbuffer")
 	vim.cmd.syntax('match FsDir "[^[:space:]]\\+/"')
-	self:render()
+	self:render(dir)
 	self:watch()
 	self:set_keymaps()
+
+	self.exist = true
 end
 
 function fsb:update_root_dir_hightlight(path)
@@ -150,6 +161,7 @@ function fsb:update(root_dir, lines)
 		vim.bo[self.buf].modified = false
 	end
 end
+
 function fsb:render(dir)
 	dir = dir or vim.uv.cwd()
 	self:update(dir)
@@ -227,7 +239,7 @@ function fsb:set_keymaps()
 			if self.lines[idx].type == "directory" then
 				self:update(self.cwd .. "/" .. self.lines[idx].name:gsub("/+$", ""))
 			elseif self.lines[idx].type == "file" then
-				vim.api.nvim_win_close(self.win, true)
+				self:close()
 				vim.cmd.edit(self.cwd .. "/" .. self.lines[idx].name)
 			end
 			self.lines_idx_map = nil
@@ -272,6 +284,7 @@ function fsb:set_keymaps()
 						{}
 					)
 				end
+				self.edit.modified = true
 				vim.cmd.Rename()
 				local esc = vim.api.nvim_replace_termcodes("<esc>", true, false, true)
 				vim.api.nvim_feedkeys(esc, "n", false)
@@ -339,6 +352,8 @@ function fsb:watch()
 						end, self.lines)
 					)
 				end
+			elseif not vim.tbl_isempty(self.edit.texts) then
+				self.edit.modified = true
 			end
 		end,
 	})
@@ -397,6 +412,8 @@ function fsb:watch()
 		if self.action == "add" then
 			return
 		end
+		self.edit =
+			{ range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {}, modified = false }
 		local mode = vim.api.nvim_get_mode().mode
 		if mode == "\22" or mode == "v" or mode == "V" or self.mode == "i" then
 			self.edit.range.start_row, self.edit.range.end_row, self.edit.range.start_col, self.edit.range.end_col =
@@ -417,6 +434,18 @@ function fsb:watch()
 				vim.api.nvim_create_autocmd("TextChanged", {
 					once = true,
 					callback = function()
+						if not self.edit.modified then
+							return
+						end
+						-- vim.print(
+						-- 	self.edit.range.start_row,
+						-- 	self.edit.range.end_row,
+						-- 	self.edit.range.start_col,
+						-- 	self.edit.range.end_col
+						-- )
+						-- if self.edit.range.start_row == nil then
+						-- 	return
+						-- end
 						local new_texts = vim.api.nvim_buf_get_lines(
 							self.buf,
 							self.edit.range.start_row - 1,
@@ -427,19 +456,29 @@ function fsb:watch()
 						for i, raw_text in ipairs(self.edit.texts) do
 							actions:rename((raw_text:gsub("%s+$", "")), (new_texts[i]:gsub("%s+$", "")))
 						end
-						self.edit =
-							{ range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {} }
+						self.edit = {
+							range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil },
+							texts = {},
+							modified = false,
+						}
 						self:update(self.cwd)
 						self.mode = "n"
 					end,
 				})
 			else
+				if not self.edit.modified then
+					return
+				end
 				local new_texts =
 					vim.api.nvim_buf_get_lines(self.buf, self.edit.range.start_row - 1, self.edit.range.end_row, true)
 				for i, raw_text in ipairs(self.edit.texts) do
 					actions:rename((raw_text:gsub("%s+$", "")), (new_texts[i]:gsub("%s+$", "")))
 				end
-				self.edit = { range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {} }
+				self.edit = {
+					range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil },
+					texts = {},
+					modified = false,
+				}
 				self:update(self.cwd)
 				self.mode = "n"
 			end
@@ -449,7 +488,12 @@ function fsb:watch()
 	vim.api.nvim_create_autocmd("WinClosed", {
 		buffer = self.buf,
 		callback = function()
-			self.edit = { range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {} }
+			self.edit = {
+				range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil },
+				texts = {},
+				modified = false,
+			}
+			self.exist = false
 			actions:remove_and_render()
 		end,
 	})

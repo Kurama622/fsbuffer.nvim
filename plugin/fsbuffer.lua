@@ -4,8 +4,6 @@ end
 
 vim.g.loaded_fsb = true
 
-local fsb = require("fsbuffer")
-
 local highlight = {
 	FsTitle = { fg = "#2aa198", bold = true, default = true },
 	FsDir = { fg = "#84a800", default = true },
@@ -18,7 +16,15 @@ local highlight = {
 for k, v in pairs(highlight) do
 	vim.api.nvim_set_hl(0, k, v)
 end
+
+local fsb = require("fsbuffer")
+
+vim.api.nvim_create_user_command("Fsbuffer", function(args)
+	fsb:toggle(args.fargs[1])
+end, { nargs = "?", range = true })
+
 fsb:set_cfg()
+
 vim.keymap.set("n", "<leader>fs", function()
-	fsb:create()
+	vim.cmd.Fsbuffer()
 end)
