@@ -35,16 +35,23 @@ function fsb:init_window_config()
 		self.cfg = require("fsbuffer.config")
 	end
 	self.cfg.height = self.cfg.height or math.floor(vim.o.lines * self.cfg.height_ratio)
-	self.cfg.width =
-		math.min(self.cfg.max_window_width, self.max_name_width + self.max_user_width + self.max_date_width + 33)
+	self.cfg.width = math.min(
+		self.cfg.max_window_width,
+		math.max(
+			vim.api.nvim_strwidth(self.cwd) - vim.api.nvim_strwidth(vim.env.HOME) + 2,
+			self.max_name_width + self.max_user_width + self.max_date_width + 33
+		)
+	)
 	self.cfg.row = self.cfg.row or math.floor((vim.o.lines - self.cfg.height) / 2)
 	self.cfg.col = self.cfg.col or math.floor((vim.o.columns - self.cfg.width) / 2)
 end
 
 function fsb:update_window()
 	if self.win then
-		self.cfg.width =
-			math.min(self.cfg.max_window_width, self.max_name_width + self.max_user_width + self.max_date_width + 33)
+		self.cfg.width = math.max(
+			vim.api.nvim_strwidth(self.cwd) - vim.api.nvim_strwidth(vim.env.HOME) + 2,
+			self.max_name_width + self.max_user_width + self.max_date_width + 33
+		)
 		self.cfg.col = math.floor((vim.o.columns - self.cfg.width) / 2)
 		vim.api.nvim_win_set_config(self.win, {
 			relative = self.cfg.relative,
@@ -165,7 +172,7 @@ function fsb:scan(cwd)
 	self:update_window()
 end
 
-function fsb:update_buffer_render(root_dir, lines)
+function fsb:update_buffer_render(root_dir, lines, keep_title)
 	if self.buf == nil then
 		return
 	end
@@ -186,7 +193,9 @@ function fsb:update_buffer_render(root_dir, lines)
 	if vim.startswith(path, vim.env.HOME) then
 		path = "~" .. path:sub(#vim.env.HOME + 1) .. "/"
 	end
-	vim.api.nvim_buf_set_lines(self.buf, 0, 1, false, { path })
+	if not keep_title then
+		vim.api.nvim_buf_set_lines(self.buf, 0, 1, false, { path })
+	end
 	self:update_root_dir_hightlight(path)
 
 	lines = lines or self.lines
@@ -327,6 +336,8 @@ function fsb:set_keymaps()
 				self.lines[i - 1].dired = true
 			end
 			vim.schedule(function()
+				local esc = vim.api.nvim_replace_termcodes("<esc>", true, false, true)
+				vim.api.nvim_feedkeys(esc, "n", false)
 				self:update_buffer_render()
 			end)
 		elseif mode == "\22" then
@@ -390,9 +401,7 @@ function fsb:watch()
 				local search_path = (text:gsub("~", vim.env.HOME))
 				local stat = vim.uv.fs_stat(search_path)
 				if stat then
-					if stat then
-						self:update_buffer_render((search_path:gsub("/+$", "")))
-					end
+					self:update_buffer_render((search_path:gsub("/+$", "")))
 				elseif #text >= #path then
 					local search_words = text:gsub(path, "")
 					local total_valid_idx, total_idx = 1, 1
@@ -410,7 +419,8 @@ function fsb:watch()
 
 							total_idx = total_idx + 1
 							return false
-						end, self.lines)
+						end, self.lines),
+						true
 					)
 				end
 			elseif not vim.tbl_isempty(self.edit.texts) then
@@ -449,22 +459,23 @@ function fsb:watch()
 		buffer = self.buf,
 		callback = function()
 			if self.mode == "c" then
+				self.mode = "n"
+				-- update root dir
+				local path = self.cwd
+				if vim.startswith(path, vim.env.HOME) then
+					path = "~" .. path:sub(#vim.env.HOME + 1) .. "/"
+				end
+				local text = vim.api.nvim_buf_get_lines(self.buf, 0, 1, true)[1]
+				if #text < #path then
+					vim.api.nvim_buf_set_text(0, 0, 0, 0, -1, { path })
+				end
+				self:update_root_dir_hightlight(path)
+
 				return
 			end
 
 			vim.cmd.Rename()
 			self.mode = "n"
-
-			-- update root dir
-			local path = self.cwd
-			if vim.startswith(path, vim.env.HOME) then
-				path = "~" .. path:sub(#vim.env.HOME + 1) .. "/"
-			end
-			local text = vim.api.nvim_buf_get_lines(self.buf, 0, 1, true)[1]
-			if #text < #path then
-				vim.api.nvim_buf_set_text(0, 0, 0, 0, -1, { path })
-			end
-			self:update_root_dir_hightlight(path)
 
 			-- create
 			if self.action == "add" then

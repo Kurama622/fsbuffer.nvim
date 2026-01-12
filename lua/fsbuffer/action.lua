@@ -73,7 +73,7 @@ function actions:rename(i, text, new_text)
 		if err then
 			vim.print(err)
 		end
-		table.remove(self.cut_list, i)
+		table.remove(self.cut_list, 1)
 		if vim.tbl_isempty(self.cut_list) then
 			vim.schedule(function()
 				self:update_buffer_render(self.cwd)
@@ -113,9 +113,9 @@ function actions:remove_all(t)
 								vim.uv.fs_unlink(p)
 							end
 						end
+						remove_dir(dir)
 					end
-					remove_dir(dir)
-					table.remove(t, i)
+					table.remove(t, 1)
 					if vim.tbl_isempty(t) then
 						vim.schedule(function()
 							self:update_buffer_render(self.cwd)
@@ -129,7 +129,7 @@ function actions:remove_all(t)
 				if err then
 					vim.print(err)
 				end
-				table.remove(t, i)
+				table.remove(t, 1)
 				if vim.tbl_isempty(t) then
 					vim.schedule(function()
 						self:update_buffer_render(self.cwd)
