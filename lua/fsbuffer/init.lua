@@ -1,16 +1,11 @@
 local fsb = {
-	cfg = {
-		border = "rounded",
-		relative = "editor",
-		width_ratio = 0.5,
-		height_ratio = 0.5,
-	},
 	exist = false,
 	lines = {},
 	cwd = nil,
 	lines_idx_map = nil,
-	name_maxwidth = 0,
-	user_maxwidth = 0,
+	max_name_width = 0,
+	max_user_width = 0,
+	max_date_width = 0,
 	cut_list = {},
 	yank_list = {},
 	mode = "n",
@@ -31,58 +26,61 @@ setmetatable(actions, {
 
 local ns_id = vim.api.nvim_create_namespace("fsbuffer_highlights")
 
-function fsb:set_cfg()
-	self.cfg.height = math.floor(vim.o.lines * self.cfg.height_ratio)
-	self.cfg.width = math.floor(vim.o.columns * self.cfg.width_ratio)
-	self.cfg.row = math.floor((vim.o.lines - self.cfg.height) / 2)
-	self.cfg.col = math.floor((vim.o.columns - self.cfg.width) / 2)
+function fsb.setup(opts)
+	fsb.cfg = vim.tbl_deep_extend("force", require("fsbuffer.config"), opts)
 end
+
+function fsb:init_window_config()
+	if self.cfg == nil then
+		self.cfg = require("fsbuffer.config")
+	end
+	self.cfg.height = self.cfg.height or math.floor(vim.o.lines * self.cfg.height_ratio)
+	self.cfg.width =
+		math.min(self.cfg.max_window_width, self.max_name_width + self.max_user_width + self.max_date_width + 33)
+	self.cfg.row = self.cfg.row or math.floor((vim.o.lines - self.cfg.height) / 2)
+	self.cfg.col = self.cfg.col or math.floor((vim.o.columns - self.cfg.width) / 2)
+end
+
+function fsb:update_window()
+	if self.win then
+		self.cfg.width =
+			math.min(self.cfg.max_window_width, self.max_name_width + self.max_user_width + self.max_date_width + 33)
+		self.cfg.col = math.floor((vim.o.columns - self.cfg.width) / 2)
+		vim.api.nvim_win_set_config(self.win, {
+			relative = self.cfg.relative,
+			border = self.cfg.border,
+			row = self.cfg.row,
+			col = self.cfg.col,
+			height = self.cfg.height,
+			width = self.cfg.width,
+		})
+	end
+end
+
 function fsb:close()
 	vim.api.nvim_win_close(self.win, true)
+
+	self.edit = {
+		range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil },
+		texts = {},
+		modified = false,
+	}
 	self.exist = false
+	self.win, self.buf = nil, nil
 end
 
-function fsb:scan(cwd)
-	self.name_maxwidth = 0
-	self.user_maxwidth = 0
-	self.lines = {}
-	local uv = vim.uv or vim.loop
-
-	local handle = uv.fs_scandir(cwd)
-	if not handle then
-		return
-	end
-
-	while true do
-		local name, t = uv.fs_scandir_next(handle)
-		if not name then
-			break
-		end
-
-		local stat = vim.uv.fs_stat(cwd .. "/" .. name)
-		if stat then
-			self.name_maxwidth = math.max(self.name_maxwidth, vim.api.nvim_strwidth(name))
-			local username = format.username(stat.uid)
-			self.user_maxwidth = math.max(self.user_maxwidth, vim.api.nvim_strwidth(username))
-
-			table.insert(self.lines, {
-				["name"] = t == "directory" and name .. "/" or name,
-				["type"] = t,
-				["mode"] = format.permissions(stat.mode),
-				["size"] = format.size(stat.size),
-				["username"] = username,
-				["date"] = format.friendly_time(stat.mtime.sec),
-			})
-		end
-	end
-end
-
-function fsb:toggle(dir)
-	if self.exist then
-		self:close()
-		return
-	end
+function fsb:create_fs_buffer(dir)
 	self.buf = vim.api.nvim_create_buf(false, true)
+	dir = dir or vim.uv.cwd()
+	self:update(dir)
+
+	local row = vim.api.nvim_win_get_cursor(0)[1]
+	if row == 1 and #self.lines > 0 then
+		vim.api.nvim_win_set_cursor(self.win, { 2, 0 })
+	end
+end
+
+function fsb:create_fs_window()
 	self.win = vim.api.nvim_open_win(self.buf, true, {
 		relative = self.cfg.relative,
 		border = self.cfg.border,
@@ -103,7 +101,18 @@ function fsb:toggle(dir)
 
 	vim.api.nvim_buf_set_name(self.buf, "fsbuffer")
 	vim.cmd.syntax('match FsDir "[^[:space:]]\\+/"')
-	self:render(dir)
+end
+
+function fsb:toggle(dir)
+	if self.exist then
+		self:close()
+		return
+	end
+
+	self:create_fs_buffer(dir)
+	self:init_window_config()
+	self:create_fs_window()
+
 	self:watch()
 	self:set_keymaps()
 
@@ -117,7 +126,49 @@ function fsb:update_root_dir_hightlight(path)
 	})
 end
 
+function fsb:scan(cwd)
+	self.max_name_width = 0
+	self.max_user_width = 0
+	self.max_date_width = 0
+	self.lines = {}
+	local uv = vim.uv or vim.loop
+
+	local handle = uv.fs_scandir(cwd)
+	if not handle then
+		return
+	end
+
+	while true do
+		local name, t = uv.fs_scandir_next(handle)
+		if not name then
+			break
+		end
+
+		local stat = vim.uv.fs_stat(cwd .. "/" .. name)
+		if stat then
+			self.max_name_width = math.max(self.max_name_width, vim.api.nvim_strwidth(name))
+			local username = format.username(stat.uid) or "nil"
+			self.max_user_width = math.max(self.max_user_width, vim.api.nvim_strwidth(username))
+			local date = format.friendly_time(stat.mtime.sec) or "nil"
+			self.max_date_width = math.max(self.max_date_width, vim.api.nvim_strwidth(date))
+
+			table.insert(self.lines, {
+				["name"] = t == "directory" and name .. "/" or name,
+				["type"] = t,
+				["mode"] = format.permissions(stat.mode),
+				["size"] = format.size(stat.size),
+				["username"] = username,
+				["date"] = date,
+			})
+		end
+	end
+	self:update_window()
+end
+
 function fsb:update(root_dir, lines)
+	if self.buf == nil then
+		return
+	end
 	-- clear buf text and extmarks
 	vim.api.nvim_buf_set_lines(self.buf, 1, -1, false, {})
 	local extmarks = vim.api.nvim_buf_get_extmarks(self.buf, ns_id, 0, -1, {})
@@ -129,7 +180,10 @@ function fsb:update(root_dir, lines)
 		self.cwd = root_dir
 		self:scan(root_dir)
 		-- render current path
-		local path = ("~/%s/"):format(vim.fs.relpath(vim.env.HOME, root_dir))
+		local path = self.cwd
+		if vim.startswith(path, vim.env.HOME) then
+			path = "~" .. path:sub(#vim.env.HOME + 1) .. "/"
+		end
 		vim.api.nvim_buf_set_lines(self.buf, 0, 1, false, { path })
 		self:update_root_dir_hightlight(path)
 	end
@@ -141,14 +195,19 @@ function fsb:update(root_dir, lines)
 			row,
 			row,
 			false,
-			{ ("%-" .. (self.name_maxwidth + 2) .. "s"):format(line.name) }
+			{ ("%-" .. (self.max_name_width + 2) .. "s"):format(line.name) }
 		)
+
+		vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
+			virt_text = { { "  ", "FsTitle" } },
+			virt_text_pos = "inline",
+		})
 
 		local texts = {
 			{ ("%-11s "):format(line.mode), "FsMode" },
-			{ ("%-" .. (self.user_maxwidth + 2) .. "s "):format(line.username), "FsUser" },
+			{ ("%-" .. (self.max_user_width + 2) .. "s "):format(line.username), "FsUser" },
 			{ ("%-10s "):format(line.size), "FsSize" },
-			{ ("%-20s "):format(line.date), "FsDate" },
+			{ ("%-" .. (self.max_date_width + 2) .. "s "):format(line.date), "FsDate" },
 		}
 		vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
 			hl_mode = "combine",
@@ -159,16 +218,6 @@ function fsb:update(root_dir, lines)
 
 	if vim.tbl_isempty(self.cut_list) then
 		vim.bo[self.buf].modified = false
-	end
-end
-
-function fsb:render(dir)
-	dir = dir or vim.uv.cwd()
-	self:update(dir)
-
-	local row = vim.api.nvim_win_get_cursor(0)[1]
-	if row == 1 and #self.lines > 0 then
-		vim.api.nvim_win_set_cursor(self.win, { 2, 0 })
 	end
 end
 
@@ -327,7 +376,11 @@ function fsb:watch()
 			if self.mode == "c" then
 				-- clear idx map
 				self.lines_idx_map = nil
-				local path = ("~/%s/"):format(vim.fs.relpath(vim.env.HOME, self.cwd))
+
+				local path = self.cwd
+				if vim.startswith(path, vim.env.HOME) then
+					path = "~" .. path:sub(#vim.env.HOME + 1) .. "/"
+				end
 				local text = vim.api.nvim_buf_get_lines(self.buf, 0, 1, true)[1]
 
 				local search_path = (text:gsub("~", vim.env.HOME))
@@ -397,8 +450,12 @@ function fsb:watch()
 
 			vim.cmd.Rename()
 			self.mode = "n"
+
 			-- update root dir
-			local path = ("~/%s/"):format(vim.fs.relpath(vim.env.HOME, self.cwd))
+			local path = self.cwd
+			if vim.startswith(path, vim.env.HOME) then
+				path = "~" .. path:sub(#vim.env.HOME + 1) .. "/"
+			end
 			local text = vim.api.nvim_buf_get_lines(self.buf, 0, 1, true)[1]
 			if #text < #path then
 				vim.api.nvim_buf_set_text(0, 0, 0, 0, -1, { path })
@@ -499,13 +556,7 @@ function fsb:watch()
 	vim.api.nvim_create_autocmd("WinClosed", {
 		buffer = self.buf,
 		callback = function()
-			self.edit = {
-				range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil },
-				texts = {},
-				modified = false,
-			}
-			self.exist = false
-			actions:remove_all(self.cut_list)
+			self:close()
 		end,
 	})
 
