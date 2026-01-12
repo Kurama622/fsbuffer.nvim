@@ -73,14 +73,10 @@ function fsb:create_fs_buffer(dir)
 	self.buf = vim.api.nvim_create_buf(false, true)
 	dir = dir or vim.uv.cwd()
 	self:update_buffer_render(dir)
-
-	local row = vim.api.nvim_win_get_cursor(0)[1]
-	if row == 1 and #self.lines > 0 then
-		vim.api.nvim_win_set_cursor(self.win, { 2, 0 })
-	end
 end
 
 function fsb:create_fs_window()
+	self:init_window_config()
 	self.win = vim.api.nvim_open_win(self.buf, true, {
 		relative = self.cfg.relative,
 		border = self.cfg.border,
@@ -101,6 +97,10 @@ function fsb:create_fs_window()
 
 	vim.api.nvim_buf_set_name(self.buf, "fsbuffer")
 	vim.cmd.syntax('match FsDir "[^[:space:]]\\+/"')
+	local row = vim.api.nvim_win_get_cursor(0)[1]
+	if row == 1 and #self.lines > 0 then
+		vim.api.nvim_win_set_cursor(self.win, { 2, 0 })
+	end
 end
 
 function fsb:toggle(dir)
@@ -110,7 +110,6 @@ function fsb:toggle(dir)
 	end
 
 	self:create_fs_buffer(dir)
-	self:init_window_config()
 	self:create_fs_window()
 
 	self:watch()
