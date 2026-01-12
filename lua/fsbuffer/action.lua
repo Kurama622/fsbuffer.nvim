@@ -65,7 +65,7 @@ function actions:create_and_render()
 		actions:create_file_recursive(name)
 	end
 	self.action = "normal"
-	self:update(self.cwd)
+	self:update_buffer_render(self.cwd)
 end
 
 function actions:rename(i, text, new_text)
@@ -76,7 +76,7 @@ function actions:rename(i, text, new_text)
 		table.remove(self.cut_list, i)
 		if vim.tbl_isempty(self.cut_list) then
 			vim.schedule(function()
-				self:update(self.cwd)
+				self:update_buffer_render(self.cwd)
 			end)
 		end
 	end)
@@ -118,7 +118,7 @@ function actions:remove_all(t)
 					table.remove(t, i)
 					if vim.tbl_isempty(t) then
 						vim.schedule(function()
-							self:update(self.cwd)
+							self:update_buffer_render(self.cwd)
 						end)
 					end
 				end)
@@ -132,7 +132,7 @@ function actions:remove_all(t)
 				table.remove(t, i)
 				if vim.tbl_isempty(t) then
 					vim.schedule(function()
-						self:update(self.cwd)
+						self:update_buffer_render(self.cwd)
 					end)
 				end
 			end)
@@ -185,7 +185,7 @@ function actions:paste_all(t)
 	end
 
 	self.yank_list = {}
-	self:update(self.cwd)
+	self:update_buffer_render(self.cwd)
 end
 
 return actions

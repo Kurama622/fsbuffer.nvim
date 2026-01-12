@@ -72,7 +72,7 @@ end
 function fsb:create_fs_buffer(dir)
 	self.buf = vim.api.nvim_create_buf(false, true)
 	dir = dir or vim.uv.cwd()
-	self:update(dir)
+	self:update_buffer_render(dir)
 
 	local row = vim.api.nvim_win_get_cursor(0)[1]
 	if row == 1 and #self.lines > 0 then
@@ -159,13 +159,14 @@ function fsb:scan(cwd)
 				["size"] = format.size(stat.size),
 				["username"] = username,
 				["date"] = date,
+				["dired"] = false,
 			})
 		end
 	end
 	self:update_window()
 end
 
-function fsb:update(root_dir, lines)
+function fsb:update_buffer_render(root_dir, lines)
 	if self.buf == nil then
 		return
 	end
@@ -179,14 +180,15 @@ function fsb:update(root_dir, lines)
 	if root_dir then
 		self.cwd = root_dir
 		self:scan(root_dir)
-		-- render current path
-		local path = self.cwd
-		if vim.startswith(path, vim.env.HOME) then
-			path = "~" .. path:sub(#vim.env.HOME + 1) .. "/"
-		end
-		vim.api.nvim_buf_set_lines(self.buf, 0, 1, false, { path })
-		self:update_root_dir_hightlight(path)
 	end
+
+	-- render current path
+	local path = self.cwd
+	if vim.startswith(path, vim.env.HOME) then
+		path = "~" .. path:sub(#vim.env.HOME + 1) .. "/"
+	end
+	vim.api.nvim_buf_set_lines(self.buf, 0, 1, false, { path })
+	self:update_root_dir_hightlight(path)
 
 	lines = lines or self.lines
 	for row, line in ipairs(lines) do
@@ -198,8 +200,9 @@ function fsb:update(root_dir, lines)
 			{ ("%-" .. (self.max_name_width + 2) .. "s"):format(line.name) }
 		)
 
+		local status = line.dired and " *" or "  "
 		vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
-			virt_text = { { "  ", "FsTitle" } },
+			virt_text = { { status, "FsTitle" } },
 			virt_text_pos = "inline",
 		})
 
@@ -268,7 +271,7 @@ function fsb:set_keymaps()
 	end, { noremap = true, buffer = true, expr = true })
 
 	vim.keymap.set("n", "<backspace>", function()
-		self:update(vim.fs.dirname(self.cwd))
+		self:update_buffer_render(vim.fs.dirname(self.cwd))
 	end, { noremap = true, buffer = true })
 
 	vim.keymap.set("n", "/", function()
@@ -286,7 +289,7 @@ function fsb:set_keymaps()
 				idx = self.lines_idx_map[row - 1]
 			end
 			if self.lines[idx].type == "directory" then
-				self:update(self.cwd .. "/" .. self.lines[idx].name:gsub("/+$", ""))
+				self:update_buffer_render(self.cwd .. "/" .. self.lines[idx].name:gsub("/+$", ""))
 			elseif self.lines[idx].type == "file" then
 				self:close()
 				vim.cmd.edit(self.cwd .. "/" .. self.lines[idx].name)
@@ -307,24 +310,27 @@ function fsb:set_keymaps()
 		noremap = true,
 	})
 
-	vim.keymap.set({ "x", "n" }, "d", function()
+	vim.keymap.set({ "x", "o" }, "d", function()
 		local mode = vim.api.nvim_get_mode().mode
-		if mode == "n" or mode == "V" then
+		if mode == "no" or mode == "V" then
 			if not vim.tbl_isempty(self.cut_list) then
 				vim.print("Unprocessed files or folders:", self.cut_list)
 				return
 			end
 			self.action = "cut"
+
 			local start_row, end_row = actions:range()
 			for i = start_row, end_row, 1 do
 				table.insert(
 					self.cut_list,
 					{ path = self.cwd, name = self.lines[i - 1].name, ["type"] = self.lines[i - 1].type }
 				)
+				self.lines[i - 1].dired = true
 			end
-
-			return "d"
-		else
+			vim.schedule(function()
+				self:update_buffer_render()
+			end)
+		elseif mode == "\22" then
 			vim.schedule(function()
 				vim.cmd.Edit()
 				for idx = self.edit.range.start_row, self.edit.range.end_row, 1 do
@@ -342,9 +348,8 @@ function fsb:set_keymaps()
 				local esc = vim.api.nvim_replace_termcodes("<esc>", true, false, true)
 				vim.api.nvim_feedkeys(esc, "n", false)
 			end)
-			return ""
 		end
-	end, { noremap = true, buffer = true, expr = true })
+	end, { noremap = true, buffer = true })
 
 	vim.keymap.set({ "x", "n" }, "y", function()
 		self.action = "yank"
@@ -387,14 +392,14 @@ function fsb:watch()
 				local stat = vim.uv.fs_stat(search_path)
 				if stat then
 					if stat then
-						self:update((search_path:gsub("/+$", "")))
+						self:update_buffer_render((search_path:gsub("/+$", "")))
 					end
 				elseif #text >= #path then
 					local search_words = text:gsub(path, "")
 					local total_valid_idx, total_idx = 1, 1
 					self.lines_idx_map = {}
 
-					self:update(
+					self:update_buffer_render(
 						nil,
 						vim.tbl_filter(function(item)
 							if string.find(item.name, search_words) then
@@ -547,7 +552,7 @@ function fsb:watch()
 					texts = {},
 					modified = false,
 				}
-				self:update(self.cwd)
+				self:update_buffer_render(self.cwd)
 				self.mode = "n"
 			end
 		end
