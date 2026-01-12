@@ -209,7 +209,7 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
 		)
 
 		local status = line.dired and " *" or "  "
-		vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
+		lines[row].dired_id = vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
 			virt_text = { { status, "FsTitle" } },
 			virt_text_pos = "inline",
 		})
@@ -448,9 +448,23 @@ function fsb:watch()
 				return
 			end
 
+			local action_range = function()
+				return actions:visual_range()
+			end
+
 			-- visual block需要特殊处理
 			if self.mode ~= "\22" then
+				action_range = function()
+					return actions:range()
+				end
 				self.mode = "i"
+			end
+
+			if self.action ~= "add" then
+				local start_row, end_row = action_range()
+				for i = start_row, end_row, 1 do
+					vim.api.nvim_buf_del_extmark(0, ns_id, self.lines[i - 1].dired_id)
+				end
 			end
 			vim.cmd.Edit()
 		end,
@@ -507,21 +521,18 @@ function fsb:watch()
 	vim.api.nvim_buf_create_user_command(self.buf, "Rename", function()
 		if not vim.tbl_isempty(self.edit.texts) then
 			if self.mode == "\22" then
+				if not self.edit.modified then
+					self:update_buffer_render()
+				end
 				vim.api.nvim_create_autocmd("TextChanged", {
+					buffer = self.buf,
 					once = true,
 					callback = function()
 						if not self.edit.modified then
+							self:update_buffer_render()
 							return
 						end
-						-- vim.print(
-						-- 	self.edit.range.start_row,
-						-- 	self.edit.range.end_row,
-						-- 	self.edit.range.start_col,
-						-- 	self.edit.range.end_col
-						-- )
-						-- if self.edit.range.start_row == nil then
-						-- 	return
-						-- end
+
 						local new_texts = vim.api.nvim_buf_get_lines(
 							self.buf,
 							self.edit.range.start_row - 1,
@@ -546,6 +557,7 @@ function fsb:watch()
 				})
 			else
 				if not self.edit.modified then
+					self:update_buffer_render()
 					return
 				end
 				local new_texts =
