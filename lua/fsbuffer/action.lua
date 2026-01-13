@@ -1,5 +1,17 @@
 local actions = {}
 
+local format = require("fsbuffer.format")
+
+local function tbl_remove_elements(t, indices)
+	table.sort(indices, function(a, b)
+		return a > b
+	end)
+
+	for _, i in ipairs(indices) do
+		table.remove(t, i)
+	end
+end
+
 function actions:range()
 	local start_pos = vim.fn.getpos("v")
 	local end_pos = vim.fn.getpos(".")
@@ -26,6 +38,39 @@ function actions:visual_range()
 	return start_row, end_row, start_col, end_col
 end
 
+function actions:update_path_detail(cwd, name)
+	local stat = vim.uv.fs_stat(cwd .. "/" .. name)
+	if stat then
+		self.max_name_width = math.max(self.max_name_width, #name)
+		local username = format.username(stat.uid) or "nil"
+		self.max_user_width = math.max(self.max_user_width, #username)
+		local date = format.friendly_time(stat.mtime.sec) or "nil"
+		self.max_date_width = math.max(self.max_date_width, #date)
+	end
+end
+
+function actions:query_path_detail(cwd, name)
+	local stat = vim.uv.fs_stat(cwd .. "/" .. name)
+	if stat then
+		local t = stat.type
+		self.max_name_width = math.max(self.max_name_width, #name)
+		local username = format.username(stat.uid) or "nil"
+		self.max_user_width = math.max(self.max_user_width, #username)
+		local date = format.friendly_time(stat.mtime.sec) or "nil"
+		self.max_date_width = math.max(self.max_date_width, #date)
+
+		table.insert(self.lines, {
+			["name"] = t == "directory" and name .. "/" or name,
+			["type"] = t,
+			["mode"] = format.permissions(stat.mode),
+			["size"] = format.size(stat.size),
+			["username"] = username,
+			["date"] = date,
+			["dired"] = false,
+		})
+	end
+end
+
 function actions:create_dir(base_dir, path)
 	vim.uv.fs_mkdir(base_dir .. "/" .. path, 493)
 end
@@ -37,8 +82,11 @@ function actions:create_dir_recursive(path)
 	local parts = vim.split(path, "/", { plain = true, trimempty = true })
 	local base_dir = self.cwd
 
-	for _, part in ipairs(parts) do
+	for i, part in ipairs(parts) do
 		self:create_dir(base_dir, part)
+		if i == 1 then
+			self:query_path_detail(self.cwd, part)
+		end
 		base_dir = base_dir .. "/" .. part
 	end
 end
@@ -54,6 +102,9 @@ function actions:create_file_recursive(path)
 			self:create_dir(base_dir, part)
 			base_dir = base_dir .. "/" .. part
 		end
+		if i == 1 then
+			self:query_path_detail(self.cwd, part)
+		end
 	end
 end
 
@@ -65,31 +116,44 @@ function actions:create_and_render()
 		actions:create_file_recursive(name)
 	end
 	self.action = "normal"
-	self:update_buffer_render(self.cwd)
+
+	self:update_buffer_render()
 end
 
-function actions:rename(i, text, new_text)
-	vim.uv.fs_rename(text, new_text, function(err)
+function actions:rename(idx, raw_dir, text, new_text)
+	vim.uv.fs_rename(raw_dir .. "/" .. text, self.cwd .. "/" .. new_text, function(err)
 		if err then
 			vim.print(err)
+		end
+		if raw_dir == self.cwd then
+			self.lines[idx].name = new_text
+
+			-- only update the current directory/file
+			self:update_path_detail(self.cwd, new_text)
+		else
+			self:query_path_detail(self.cwd, new_text)
 		end
 		table.remove(self.cut_list, 1)
 		if vim.tbl_isempty(self.cut_list) then
 			vim.schedule(function()
-				self:update_buffer_render(self.cwd)
+				self:update_buffer_render()
 			end)
 		end
 	end)
 end
 
 function actions:rename_all(t)
-	for i, item in ipairs(t) do
-		self:rename(i, item.path .. "/" .. item.name, self.cwd .. "/" .. item.name)
+	for _, item in ipairs(t) do
+		local basename = item.type == "directory" and item.name:sub(1, -2) or item.name
+		self:rename(nil, item.path, basename, basename)
 	end
 end
 
 function actions:remove_all(t)
-	for i, item in ipairs(t) do
+	local indices = vim.tbl_map(function(item)
+		return item.idx
+	end, t)
+	for _, item in ipairs(t) do
 		if item.type == "directory" then
 			local function remove_dir(dir)
 				vim.uv.fs_rmdir(dir, function(err)
@@ -114,12 +178,14 @@ function actions:remove_all(t)
 							end
 						end
 						remove_dir(dir)
-					end
-					table.remove(t, 1)
-					if vim.tbl_isempty(t) then
-						vim.schedule(function()
-							self:update_buffer_render(self.cwd)
-						end)
+					else
+						table.remove(t, 1)
+						if vim.tbl_isempty(t) then
+							tbl_remove_elements(self.lines, indices)
+							vim.schedule(function()
+								self:update_buffer_render()
+							end)
+						end
 					end
 				end)
 			end
@@ -131,8 +197,9 @@ function actions:remove_all(t)
 				end
 				table.remove(t, 1)
 				if vim.tbl_isempty(t) then
+					tbl_remove_elements(self.lines, indices)
 					vim.schedule(function()
-						self:update_buffer_render(self.cwd)
+						self:update_buffer_render()
 					end)
 				end
 			end)
@@ -142,10 +209,12 @@ end
 
 function actions:paste_all(t)
 	for _, item in ipairs(t) do
-		local src = item.path .. "/" .. item.name
-		local desc = self.cwd .. "/" .. item.name
+		local basename = item.type == "directory" and item.name:sub(1, -2) or item.name
+		local src = item.path .. "/" .. basename
+		local desc = self.cwd .. "/" .. basename
 		if src == desc then
-			desc = self.cwd .. "/_" .. item.name
+			desc = self.cwd .. "/_" .. basename
+			basename = "_" .. basename
 		end
 		if item.type == "directory" then
 			local function copy_dir(source, dest)
@@ -182,10 +251,11 @@ function actions:paste_all(t)
 		elseif item.type == "file" then
 			vim.uv.fs_copyfile(src, desc)
 		end
+		self:query_path_detail(self.cwd, basename)
 	end
 
 	self.yank_list = {}
-	self:update_buffer_render(self.cwd)
+	self:update_buffer_render()
 end
 
 return actions

@@ -14,7 +14,6 @@ local fsb = {
 	buf = nil,
 	win = nil,
 }
-local format = require("fsbuffer.format")
 local actions = require("fsbuffer.action")
 setmetatable(actions, {
 	__index = fsb,
@@ -145,29 +144,11 @@ function fsb:scan(cwd)
 	end
 
 	while true do
-		local name, t = uv.fs_scandir_next(handle)
+		local name, _ = uv.fs_scandir_next(handle)
 		if not name then
 			break
 		end
-
-		local stat = vim.uv.fs_stat(cwd .. "/" .. name)
-		if stat then
-			self.max_name_width = math.max(self.max_name_width, vim.api.nvim_strwidth(name))
-			local username = format.username(stat.uid) or "nil"
-			self.max_user_width = math.max(self.max_user_width, vim.api.nvim_strwidth(username))
-			local date = format.friendly_time(stat.mtime.sec) or "nil"
-			self.max_date_width = math.max(self.max_date_width, vim.api.nvim_strwidth(date))
-
-			table.insert(self.lines, {
-				["name"] = t == "directory" and name .. "/" or name,
-				["type"] = t,
-				["mode"] = format.permissions(stat.mode),
-				["size"] = format.size(stat.size),
-				["username"] = username,
-				["date"] = date,
-				["dired"] = false,
-			})
-		end
+		actions:query_path_detail(cwd, name)
 	end
 	self:update_window()
 end
@@ -240,6 +221,8 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
 	if vim.tbl_isempty(self.cut_list) then
 		vim.bo[self.buf].modified = false
 	end
+
+	self:update_window()
 end
 
 function fsb:set_keymaps()
@@ -341,7 +324,7 @@ function fsb:set_keymaps()
 			for i = start_row, end_row, 1 do
 				table.insert(
 					self.cut_list,
-					{ path = self.cwd, name = self.lines[i - 1].name, ["type"] = self.lines[i - 1].type }
+					{ path = self.cwd, name = self.lines[i - 1].name, ["type"] = self.lines[i - 1].type, idx = i - 1 }
 				)
 				self.lines[i - 1].dired = true
 			end
@@ -552,9 +535,10 @@ function fsb:watch()
 
 						for i, raw_text in ipairs(self.edit.texts) do
 							actions:rename(
-								i,
-								self.cwd .. "/" .. (raw_text:gsub("%s+$", "")),
-								self.cwd .. "/" .. (new_texts[i]:gsub("%s+$", ""))
+								self.edit.range.start_row + i - 2,
+								self.cwd,
+								(raw_text:gsub("%s+$", "")),
+								(new_texts[i]:gsub("%s+$", ""))
 							)
 						end
 						self.edit = {
@@ -574,9 +558,10 @@ function fsb:watch()
 					vim.api.nvim_buf_get_lines(self.buf, self.edit.range.start_row - 1, self.edit.range.end_row, true)
 				for i, raw_text in ipairs(self.edit.texts) do
 					actions:rename(
-						i,
-						self.cwd .. "/" .. (raw_text:gsub("%s+$", "")),
-						self.cwd .. "/" .. (new_texts[i]:gsub("%s+$", ""))
+						self.edit.range.start_row + i - 2,
+						self.cwd,
+						(raw_text:gsub("%s+$", "")),
+						(new_texts[i]:gsub("%s+$", ""))
 					)
 				end
 				self.edit = {
@@ -584,7 +569,7 @@ function fsb:watch()
 					texts = {},
 					modified = false,
 				}
-				self:update_buffer_render(self.cwd)
+				self:update_buffer_render()
 				self.mode = "n"
 			end
 		end
