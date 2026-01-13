@@ -127,7 +127,7 @@ end
 
 function fsb:update_root_dir_hightlight(path)
 	vim.api.nvim_buf_set_extmark(self.buf, ns_id, 0, 0, {
-		end_col = vim.api.nvim_strwidth(path),
+		end_col = #path,
 		hl_group = "FsTitle",
 	})
 end
@@ -208,7 +208,17 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
 			{ ("%-" .. (self.max_name_width + 2) .. "s"):format(line.name) }
 		)
 
-		local status = line.dired and " *" or "  "
+		local status = (
+			line.dired
+			or (
+				self.cut_list
+				and not vim.tbl_isempty(vim.tbl_filter(function(item)
+					return item.path == self.cwd and item.name == line.name
+				end, self.cut_list))
+			)
+		)
+				and " *"
+			or "  "
 		lines[row].dired_id = vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
 			virt_text = { { status, "FsTitle" } },
 			virt_text_pos = "inline",
@@ -286,7 +296,7 @@ function fsb:set_keymaps()
 		self.mode = "c"
 		self.action = "normal"
 		vim.api.nvim_win_set_cursor(0, { 1, 0 })
-		vim.api.nvim_feedkeys("A", "n", false)
+		vim.cmd("startinsert!")
 	end, { noremap = true, buffer = true })
 
 	vim.api.nvim_buf_set_keymap(self.buf, "n", "<cr>", "", {
@@ -309,6 +319,10 @@ function fsb:set_keymaps()
 
 	vim.api.nvim_buf_set_keymap(self.buf, "n", "o", "", {
 		callback = function()
+			if self.lines_idx_map ~= nil then
+				self.lines_idx_map = nil
+				self:update_buffer_render()
+			end
 			self.action = "add"
 			local row = vim.api.nvim_buf_line_count(self.buf)
 			vim.api.nvim_buf_set_lines(self.buf, row, row, true, { "" })
@@ -321,10 +335,6 @@ function fsb:set_keymaps()
 	vim.keymap.set({ "x", "o" }, "d", function()
 		local mode = vim.api.nvim_get_mode().mode
 		if mode == "no" or mode == "V" then
-			if not vim.tbl_isempty(self.cut_list) then
-				vim.print("Unprocessed files or folders:", self.cut_list)
-				return
-			end
 			self.action = "cut"
 
 			local start_row, end_row = actions:range()
@@ -340,7 +350,7 @@ function fsb:set_keymaps()
 				vim.api.nvim_feedkeys(esc, "n", false)
 				self:update_buffer_render()
 			end)
-		elseif mode == "\22" then
+		elseif mode == "\22" or mode == "v" then
 			vim.schedule(function()
 				vim.cmd.Edit()
 				for idx = self.edit.range.start_row, self.edit.range.end_row, 1 do
