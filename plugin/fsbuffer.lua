@@ -23,7 +23,3 @@ local fsb = require("fsbuffer")
 vim.api.nvim_create_user_command("Fsbuffer", function(args)
   fsb:toggle(args.fargs[1])
 end, { nargs = "?", range = true })
-
-vim.keymap.set("n", "<leader>fs", function()
-  vim.cmd.Fsbuffer()
-end)
