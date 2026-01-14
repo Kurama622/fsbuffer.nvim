@@ -1,4 +1,5 @@
 local format = {}
+-- Reference from: https://github.com/nvimdev/dired.nvim
 local ffi = require("ffi")
 
 ffi.cdef([[
