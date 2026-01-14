@@ -34,9 +34,6 @@ function fsb.setup(opts)
 end
 
 function fsb:init_window_config()
-  if self.cfg == nil then
-    self.cfg = require("fsbuffer.config")
-  end
   self.cfg.height = self.cfg.height or math.floor(vim.o.lines * self.cfg.height_ratio)
   self.cfg.width = math.min(
     self.cfg.max_window_width,
@@ -82,6 +79,10 @@ end
 function fsb:create_fs_buffer(dir)
   self.buf = vim.api.nvim_create_buf(false, true)
   dir = dir or vim.uv.cwd()
+
+  if self.cfg == nil then
+    self.cfg = require("fsbuffer.config")
+  end
   self:update_buffer_render(dir)
 end
 
@@ -203,8 +204,8 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
         end, self.cut_list))
       )
     )
-        and " *"
-      or "  "
+        and " " .. self.cfg.indicator
+      or string.rep(" ", vim.fn.strdisplaywidth(self.cfg.indicator) + 1)
     lines[row].dired_id = vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
       virt_text = { { status, "FsTitle" } },
       virt_text_pos = "inline",
