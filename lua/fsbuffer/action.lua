@@ -121,18 +121,18 @@ function actions:create_and_render()
 end
 
 function actions:rename(idx, raw_dir, text, new_text)
- local t = "file"
- if new_text:sub(-1) == "/" then
-   t = "directory"
-   new_text = new_text:sub(1,-2)
- end
+	local t = "file"
+	if new_text:sub(-1) == "/" then
+		t = "directory"
+		new_text = new_text:sub(1, -2)
+	end
 	vim.uv.fs_rename(raw_dir .. "/" .. text, self.cwd .. "/" .. new_text, function(err)
 		if err then
 			vim.print(err)
 		end
 		if raw_dir == self.cwd then
 			self.lines[idx].name = t == "directory" and new_text .. "/" or new_text
-   self.lines[idx].dired = false
+			self.lines[idx].dired = false
 
 			-- only update the current directory/file
 			self:update_path_detail(self.cwd, new_text)

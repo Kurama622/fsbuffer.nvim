@@ -203,6 +203,7 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
 		lines[row].dired_id = vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
 			virt_text = { { status, "FsTitle" } },
 			virt_text_pos = "inline",
+			right_gravity = false,
 		})
 
 		local texts = {
@@ -441,24 +442,8 @@ function fsb:watch()
 				return
 			end
 
-			local action_range = function()
-				return actions:visual_range()
-			end
-
 			-- visual block需要特殊处理
-			if self.mode ~= "\22" then
-				action_range = function()
-					return actions:range()
-				end
-				self.mode = "i"
-			end
-
-			if self.action ~= "add" then
-				local start_row, end_row = action_range()
-				for i = start_row, end_row, 1 do
-					vim.api.nvim_buf_del_extmark(0, ns_id, self.lines[i - 1].dired_id)
-				end
-			end
+			self.mode = self.mode == "\22" and "\22" or "i"
 			vim.cmd.Edit()
 		end,
 	})
@@ -513,49 +498,13 @@ function fsb:watch()
 
 	vim.api.nvim_buf_create_user_command(self.buf, "Rename", function()
 		if not vim.tbl_isempty(self.edit.texts) then
-			if self.mode == "\22" then
-				if not self.edit.modified then
-					self:update_buffer_render()
-				end
-				vim.api.nvim_create_autocmd("TextChanged", {
-					buffer = self.buf,
-					once = true,
-					callback = function()
-						if not self.edit.modified then
-							self:update_buffer_render()
-							return
-						end
-
-						local new_texts = vim.api.nvim_buf_get_lines(
-							self.buf,
-							self.edit.range.start_row - 1,
-							self.edit.range.end_row,
-							true
-						)
-
-						for i, raw_text in ipairs(self.edit.texts) do
-							actions:rename(
-								self.edit.range.start_row + i - 2,
-								self.cwd,
-								(raw_text:gsub("%s+$", "")),
-								(new_texts[i]:gsub("%s+$", ""))
-							)
-						end
-						self.edit = {
-							range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil },
-							texts = {},
-							modified = false,
-						}
-						self.mode = "n"
-					end,
-				})
-			else
-				if not self.edit.modified then
-					self:update_buffer_render()
-					return
-				end
+			if not self.edit.modified then
+				self:update_buffer_render()
+			end
+			vim.schedule(function()
 				local new_texts =
 					vim.api.nvim_buf_get_lines(self.buf, self.edit.range.start_row - 1, self.edit.range.end_row, true)
+
 				for i, raw_text in ipairs(self.edit.texts) do
 					actions:rename(
 						self.edit.range.start_row + i - 2,
@@ -569,9 +518,7 @@ function fsb:watch()
 					texts = {},
 					modified = false,
 				}
-				self:update_buffer_render()
-				self.mode = "n"
-			end
+			end)
 		end
 	end, {})
 
