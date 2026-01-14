@@ -1,6 +1,7 @@
 local actions = {}
 
 local format = require("fsbuffer.format")
+local log = require("fsbuffer.log")
 
 local function tbl_remove_elements(t, indices)
   table.sort(indices, function(a, b)
@@ -128,7 +129,7 @@ function actions:rename(idx, raw_dir, text, new_text)
   end
   vim.uv.fs_rename(raw_dir .. "/" .. text, self.cwd .. "/" .. new_text, function(err)
     if err then
-      vim.print(err)
+      log.error(err)
     end
     if raw_dir == self.cwd then
       self.lines[idx].name = t == "directory" and new_text .. "/" or new_text
@@ -198,7 +199,7 @@ function actions:remove_all(t)
     elseif item.type == "file" then
       vim.uv.fs_unlink(item.path .. "/" .. item.name, function(err)
         if err then
-          vim.print(err)
+          log.error(err)
         end
         table.remove(t, 1)
         if vim.tbl_isempty(t) then
@@ -225,7 +226,7 @@ function actions:paste_all(t)
       local function copy_dir(source, dest)
         local stat = vim.uv.fs_stat(source)
         if not stat then
-          vim.print("The dir does not exist: " .. source)
+          log.warn("The dir does not exist: " .. source)
           return
         end
 
