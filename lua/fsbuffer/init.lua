@@ -6,6 +6,7 @@ local fsb = {
   max_name_width = 0,
   max_user_width = 0,
   max_date_width = 0,
+  last_cursor_row = 1,
   cut_list = {},
   yank_list = {},
   mode = "n",
@@ -61,6 +62,10 @@ function fsb:update_window()
       height = self.cfg.height,
       width = self.cfg.width,
     })
+    if self.mode ~= "c" then
+      pcall(vim.api.nvim_win_set_cursor, self.win, { self.last_cursor_row, 0 })
+      self.last_cursor_row = 1
+    end
   end
 end
 
@@ -74,6 +79,9 @@ function fsb:close()
   }
   self.exist = false
   self.win, self.buf = nil, nil
+  self.yank_list = {}
+  self.mode = "n"
+  self.action = "normal"
 end
 
 function fsb:create_fs_buffer(dir)
@@ -156,7 +164,6 @@ function fsb:scan(cwd)
     end
     actions:query_path_detail(cwd, name)
   end
-  self:update_window()
 end
 
 function fsb:update_buffer_render(root_dir, lines, keep_title)
@@ -249,7 +256,7 @@ function fsb:watch()
 
         local search_path = (text:gsub("~", vim.env.HOME))
         local stat = vim.uv.fs_stat(search_path)
-        if stat then
+        if stat and stat.type == "directory" then
           self:update_buffer_render((search_path:gsub("/+$", "")))
         elseif #text >= #path then
           local search_words = text:gsub(path, "")
@@ -293,6 +300,11 @@ function fsb:watch()
   vim.api.nvim_create_autocmd("InsertEnter", {
     buffer = self.buf,
     callback = function()
+      -- 首行插入为搜索
+      if vim.api.nvim_win_get_cursor(0)[1] == 1 then
+        self.mode = "c"
+      end
+
       if self.mode == "c" then
         return
       end
@@ -326,6 +338,7 @@ function fsb:watch()
 
       -- create
       if self.action == "add" then
+        self.last_cursor_row = vim.api.nvim_win_get_cursor(0)[1]
         actions:create_and_render()
       end
     end,
@@ -335,6 +348,8 @@ function fsb:watch()
     if self.action == "add" then
       return
     end
+
+    self.last_cursor_row = vim.api.nvim_win_get_cursor(0)[1]
     self.edit =
       { range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {}, modified = false }
     local mode = vim.api.nvim_get_mode().mode
@@ -388,6 +403,7 @@ function fsb:watch()
   vim.api.nvim_create_autocmd({ "QuitPre", "BufWriteCmd" }, {
     pattern = "fsbuffer",
     callback = function()
+      self.last_cursor_row = vim.api.nvim_buf_line_count(self.buf) - #self.cut_list
       actions:remove_all(self.cut_list)
       vim.bo[self.buf].modified = false
     end,
