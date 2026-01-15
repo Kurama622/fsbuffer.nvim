@@ -4,33 +4,14 @@ local actions = require("fsbuffer.action")
 local return_normal = function()
   local esc = vim.api.nvim_replace_termcodes("<esc>", true, false, true)
   vim.api.nvim_feedkeys(esc, "n", false)
+  keymaps.mode = "n"
 end
 
 local replace = function(new_char)
-  local start_row, end_row = actions:range()
+  local start_row, end_row, start_col, end_col = actions:range()
 
-  -- 获取选区覆盖的视觉列（Virtual Columns）
-  -- 使用 curswant 处理 Ctrl-v 的矩形边界
-  local left_vcol = vim.fn.virtcol("'<")
-  local right_vcol = vim.fn.virtcol("'>")
-
-  -- 确保左小右大
-  if left_vcol > right_vcol then
-    left_vcol, right_vcol = right_vcol, left_vcol
-  end
-
-  -- 3. 遍历每一行进行精准替换
-  for lnum = start_row, end_row do
-    -- 将视觉列转换为该行具体的字节位置
-    -- vim.fn.virtcol2col 能处理 inline 虚拟文本带来的偏移
-    local byte_start = vim.fn.virtcol2col(0, lnum, left_vcol)
-    local byte_end = vim.fn.virtcol2col(0, lnum, right_vcol)
-
-    if byte_start > 0 then
-      -- 替换该行指定范围内的字符
-      -- nvim_buf_set_text 的坐标是从 0 开始的，且不包含终点
-      vim.api.nvim_buf_set_text(0, lnum - 1, byte_start - 1, lnum - 1, byte_end, { new_char })
-    end
+  for lnum = start_row, end_row, 1 do
+    vim.api.nvim_buf_set_text(0, lnum - 1, start_col - 1, lnum - 1, end_col, { new_char })
   end
   return_normal()
   return start_row, end_row
@@ -140,7 +121,7 @@ function keymaps:setup()
       end,
       mode = { "x", "n" },
       key = "r",
-      opts = { noremap = true, buffer = true }
+      opts = { noremap = true, buffer = true },
     },
 
     -- open
@@ -192,6 +173,20 @@ function keymaps:setup()
       end,
       mode = "n",
       key = "o",
+      opts = { noremap = true, buffer = true },
+    },
+
+    -- delete
+    {
+      action = function()
+        if vim.api.nvim_get_mode().mode == "n" then
+          vim.api.nvim_feedkeys("vd", "m", true)
+        elseif vim.api.nvim_get_mode().mode == "\22" then
+          vim.api.nvim_feedkeys("d", "m", true)
+        end
+      end,
+      mode = { "x", "n" },
+      key = "x",
       opts = { noremap = true, buffer = true },
     },
 

@@ -355,25 +355,26 @@ function fsb:watch()
     if not vim.tbl_isempty(self.edit.texts) then
       if not self.edit.modified then
         self:update_buffer_render()
-      end
-      vim.schedule(function()
-        local new_texts =
-          vim.api.nvim_buf_get_lines(self.buf, self.edit.range.start_row - 1, self.edit.range.end_row, true)
+      else
+        vim.schedule(function()
+          local new_texts =
+            vim.api.nvim_buf_get_lines(self.buf, self.edit.range.start_row - 1, self.edit.range.end_row, true)
 
-        for i, raw_text in ipairs(self.edit.texts) do
-          actions:rename(
-            self.edit.range.start_row + i - 2,
-            self.cwd,
-            (raw_text:gsub("%s+$", "")),
-            (new_texts[i]:gsub("%s+$", ""))
-          )
-        end
-        self.edit = {
-          range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil },
-          texts = {},
-          modified = false,
-        }
-      end)
+          for i, raw_text in ipairs(self.edit.texts) do
+            actions:rename(
+              self.edit.range.start_row + i - 2,
+              self.cwd,
+              (raw_text:gsub("%s+$", "")),
+              (new_texts[i]:gsub("%s+$", ""))
+            )
+          end
+          self.edit = {
+            range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil },
+            texts = {},
+            modified = false,
+          }
+        end)
+      end
     end
   end, {})
 
