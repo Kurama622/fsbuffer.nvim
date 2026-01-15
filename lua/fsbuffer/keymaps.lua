@@ -1,7 +1,42 @@
 local keymaps = {}
+local actions = require("fsbuffer.action")
+
+local return_normal = function()
+  local esc = vim.api.nvim_replace_termcodes("<esc>", true, false, true)
+  vim.api.nvim_feedkeys(esc, "n", false)
+end
+
+local replace = function(new_char)
+  local start_row, end_row = actions:range()
+
+  -- 获取选区覆盖的视觉列（Virtual Columns）
+  -- 使用 curswant 处理 Ctrl-v 的矩形边界
+  local left_vcol = vim.fn.virtcol("'<")
+  local right_vcol = vim.fn.virtcol("'>")
+
+  -- 确保左小右大
+  if left_vcol > right_vcol then
+    left_vcol, right_vcol = right_vcol, left_vcol
+  end
+
+  -- 3. 遍历每一行进行精准替换
+  for lnum = start_row, end_row do
+    -- 将视觉列转换为该行具体的字节位置
+    -- vim.fn.virtcol2col 能处理 inline 虚拟文本带来的偏移
+    local byte_start = vim.fn.virtcol2col(0, lnum, left_vcol)
+    local byte_end = vim.fn.virtcol2col(0, lnum, right_vcol)
+
+    if byte_start > 0 then
+      -- 替换该行指定范围内的字符
+      -- nvim_buf_set_text 的坐标是从 0 开始的，且不包含终点
+      vim.api.nvim_buf_set_text(0, lnum - 1, byte_start - 1, lnum - 1, byte_end, { new_char })
+    end
+  end
+  return_normal()
+  return start_row, end_row
+end
 
 function keymaps:setup()
-  local actions = require("fsbuffer.action")
   local t = {
     -- visual block
     {
@@ -81,6 +116,33 @@ function keymaps:setup()
       opts = { noremap = true, buffer = true },
     },
 
+    -- replace
+    {
+      action = function()
+        local old_cursor = vim.opt.guicursor:get()
+        vim.opt.guicursor:append("a:hor20-blinkon200")
+        local char_code = vim.fn.getchar()
+        vim.opt.guicursor = old_cursor
+        local char = type(char_code) == "number" and vim.fn.nr2char(char_code) or char_code
+
+        self.mode = "r"
+        if char_code == 27 then
+          return_normal()
+          return
+        end
+        local start_row, end_row = replace(char)
+
+        local texts = vim.api.nvim_buf_get_lines(0, start_row - 1, end_row, true)
+
+        for i, text in ipairs(texts) do
+          actions:rename(start_row + i - 2, self.cwd, self.lines[start_row + i - 2].name, (text:gsub("%s+$", "")))
+        end
+      end,
+      mode = { "x", "n" },
+      key = "r",
+      opts = { noremap = true, buffer = true }
+    },
+
     -- open
     {
       action = function()
@@ -149,8 +211,7 @@ function keymaps:setup()
             self.lines[i - 1].dired = true
           end
           vim.schedule(function()
-            local esc = vim.api.nvim_replace_termcodes("<esc>", true, false, true)
-            vim.api.nvim_feedkeys(esc, "n", false)
+            return_normal()
             self:update_buffer_render()
           end)
         elseif mode == "\22" or mode == "v" then
@@ -168,8 +229,7 @@ function keymaps:setup()
             end
             self.edit.modified = true
             vim.cmd.Rename()
-            local esc = vim.api.nvim_replace_termcodes("<esc>", true, false, true)
-            vim.api.nvim_feedkeys(esc, "n", false)
+            return_normal()
           end)
         end
       end,
