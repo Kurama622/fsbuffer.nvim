@@ -105,6 +105,8 @@ function fsb:create_fs_window()
     width = self.cfg.width,
   })
 
+  vim.wo[self.win].wrap = false
+  vim.wo[self.win].winfixbuf = true
   vim.wo[self.win].number = false
   vim.wo[self.win].relativenumber = false
   vim.wo[self.win].signcolumn = "no"
