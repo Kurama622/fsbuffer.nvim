@@ -31,12 +31,7 @@ end
 local ns_id = vim.api.nvim_create_namespace("fsbuffer_highlights")
 local fsb_group = vim.api.nvim_create_augroup("FsBuffer", { clear = true })
 
-function fsb.setup(opts)
-  fsb.cfg = vim.tbl_deep_extend("force", require("fsbuffer.config"), opts)
-end
-
-function fsb:init_window_config()
-  self.cfg.height = self.cfg.height or math.floor(vim.o.lines * self.cfg.height_ratio)
+function fsb:set_window_max_width()
   self.cfg.width = math.min(
     self.cfg.max_window_width,
     math.max(
@@ -44,16 +39,22 @@ function fsb:init_window_config()
       self.max_name_width + self.max_user_width + self.max_date_width + 33
     )
   )
+end
+
+function fsb.setup(opts)
+  fsb.cfg = vim.tbl_deep_extend("force", require("fsbuffer.config"), opts)
+end
+
+function fsb:init_window_config()
+  self.cfg.height = self.cfg.height or math.floor(vim.o.lines * self.cfg.height_ratio)
+  self:set_window_max_width()
   self.cfg.row = self.cfg.row or math.floor((vim.o.lines - self.cfg.height) / 2)
   self.cfg.col = self.cfg.col or math.floor((vim.o.columns - self.cfg.width) / 2)
 end
 
 function fsb:update_window()
   if self.win then
-    self.cfg.width = math.max(
-      vim.api.nvim_strwidth(self.cwd) - vim.api.nvim_strwidth(vim.env.HOME) + 2,
-      self.max_name_width + self.max_user_width + self.max_date_width + 33
-    )
+    self:set_window_max_width()
     self.cfg.col = math.floor((vim.o.columns - self.cfg.width) / 2)
     vim.api.nvim_win_set_config(self.win, {
       relative = self.cfg.relative,
@@ -117,6 +118,7 @@ function fsb:create_fs_window()
   vim.bo[self.buf].buftype = "acwrite"
   vim.bo[self.buf].bufhidden = "wipe"
   vim.bo[self.buf].swapfile = false
+  vim.bo[self.buf].undolevels = -1
 
   vim.api.nvim_buf_set_name(self.buf, "fsbuffer")
   vim.cmd.syntax('match FsDir "[^[:space:]]\\+/"')
@@ -195,6 +197,14 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
     vim.api.nvim_buf_set_lines(self.buf, 0, 1, false, { path })
   end
   self:update_root_dir_hightlight(path)
+
+  self:set_window_max_width()
+  vim.api.nvim_buf_set_extmark(self.buf, ns_id, 0, 0, {
+    virt_lines = {
+      { { " " .. string.rep("─", self.cfg.width - 2) .. " ", "Comment" } },
+    },
+    virt_lines_above = false,
+  })
 
   lines = lines or self.lines
   for row, line in ipairs(lines) do
