@@ -29,7 +29,7 @@ for _, t in ipairs({ actions, keymaps }) do
 end
 
 local ns_id = vim.api.nvim_create_namespace("fsbuffer_highlights")
-local group = vim.api.nvim_create_augroup("FsBuffer", { clear = true })
+local fsb_group = vim.api.nvim_create_augroup("FsBuffer", { clear = true })
 
 function fsb.setup(opts)
   fsb.cfg = vim.tbl_deep_extend("force", require("fsbuffer.config"), opts)
@@ -80,7 +80,8 @@ function fsb:close()
   }
   self.exist = false
   self.win, self.buf = nil, nil
-  self.yank_list = {}
+  self.yank_list, self.cut_list = {}, {}
+  self.last_cursor_row = 1
   self.mode = "n"
   self.action = "normal"
 end
@@ -200,13 +201,7 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
     local display_width = vim.fn.strdisplaywidth(line.name)
     local padding_count = (self.max_name_width + 2) - display_width
     local padded_text = line.name .. string.rep(" ", math.max(0, padding_count))
-    vim.api.nvim_buf_set_lines(
-      self.buf,
-      row,
-      row,
-      false,
-      { padded_text }
-    )
+    vim.api.nvim_buf_set_lines(self.buf, row, row, false, { padded_text })
 
     local status = (
       line.dired
@@ -247,6 +242,7 @@ end
 
 function fsb:watch()
   vim.api.nvim_create_autocmd("TextChangedI", {
+    group = fsb_group,
     buffer = self.buf,
     callback = function()
       -- search mode
@@ -291,6 +287,7 @@ function fsb:watch()
     end,
   })
   vim.api.nvim_create_autocmd("CursorMoved", {
+    group = fsb_group,
     buffer = self.buf,
     callback = function()
       if self.mode == "c" then
@@ -304,6 +301,7 @@ function fsb:watch()
   })
 
   vim.api.nvim_create_autocmd("InsertEnter", {
+    group = fsb_group,
     buffer = self.buf,
     callback = function()
       -- 首行插入为搜索
@@ -321,6 +319,7 @@ function fsb:watch()
     end,
   })
   vim.api.nvim_create_autocmd("InsertLeave", {
+    group = fsb_group,
     buffer = self.buf,
     callback = function()
       if self.mode == "c" then
@@ -400,7 +399,7 @@ function fsb:watch()
   end, {})
 
   vim.api.nvim_create_autocmd("CmdlineChanged", {
-    group = group,
+    group = fsb_group,
     buffer = self.buf,
     callback = function()
       local cmd = vim.fn.getcmdline()
@@ -410,21 +409,34 @@ function fsb:watch()
         local pos = vim.fn.getcmdpos()
         vim.fn.setcmdpos(pos + 2)
       end
-    end
+    end,
   })
 
   vim.api.nvim_create_autocmd("WinClosed", {
+    group = fsb_group,
     buffer = self.buf,
     callback = function()
       self:close()
     end,
   })
 
-  vim.api.nvim_create_autocmd({ "QuitPre", "BufWriteCmd" }, {
-    pattern = "fsbuffer",
+  vim.api.nvim_create_autocmd("BufWriteCmd", {
+    group = fsb_group,
+    buffer = self.buf,
     callback = function()
       self.last_cursor_row = vim.api.nvim_buf_line_count(self.buf) - #self.cut_list
       actions:remove_all(self.cut_list)
+      vim.bo[self.buf].modified = false
+    end,
+  })
+
+  vim.api.nvim_create_autocmd("QuitPre", {
+    group = fsb_group,
+    buffer = self.buf,
+    callback = function()
+      if self.cfg.delete_the_cut_on_close then
+        actions:remove_all(self.cut_list)
+      end
       vim.bo[self.buf].modified = false
     end,
   })

@@ -285,17 +285,16 @@ function keymaps:setup()
             for i = firstline, new_lastline - 1 do
               local new_text = (vim.api.nvim_buf_get_lines(0, i, i + 1, true)[1]:gsub("%s+$", ""))
               if new_text ~= self.lines[i].name then
-                table.insert(self.cut_list, { path = self.cwd, name = self.lines[i].name, ["type"] = self.lines[i].type })
-                actions:rename(
-                  i,
-                  self.cwd,
-                  self.lines[i].name,
-                  new_text
+                table.insert(
+                  self.cut_list,
+                  { path = self.cwd, name = self.lines[i].name, ["type"] = self.lines[i].type }
                 )
+                actions:rename(i, self.cwd, self.lines[i].name, new_text)
               end
             end
+            vim.cmd("nohl")
             return true
-          end
+          end,
         })
         vim.api.nvim_feedkeys(":", "n", false)
       end,
