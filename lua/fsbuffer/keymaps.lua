@@ -273,6 +273,36 @@ function keymaps:setup()
       key = "p",
       opts = { noremap = true, buffer = true, expr = true },
     },
+
+    -- substitute
+    {
+      action = function()
+        self.mode = "substitute"
+
+        self.last_cursor_row = vim.api.nvim_win_get_cursor(0)[1]
+        vim.api.nvim_buf_attach(0, false, {
+          on_lines = function(_, _, _, firstline, lastline, new_lastline)
+            for i = firstline, new_lastline - 1 do
+              local new_text = (vim.api.nvim_buf_get_lines(0, i, i + 1, true)[1]:gsub("%s+$", ""))
+              if new_text ~= self.lines[i].name then
+                table.insert(self.cut_list, { path = self.cwd, name = self.lines[i].name, ["type"] = self.lines[i].type })
+                actions:rename(
+                  i,
+                  self.cwd,
+                  self.lines[i].name,
+                  new_text
+                )
+              end
+            end
+            return true
+          end
+        })
+        vim.api.nvim_feedkeys(":", "n", false)
+      end,
+      mode = { "x", "n" },
+      key = ":",
+      opts = { noremap = true, buffer = true },
+    },
   }
 
   for _, map in ipairs(t) do
