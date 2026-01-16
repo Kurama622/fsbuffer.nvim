@@ -29,6 +29,7 @@ for _, t in ipairs({ actions, keymaps }) do
 end
 
 local ns_id = vim.api.nvim_create_namespace("fsbuffer_highlights")
+local group = vim.api.nvim_create_augroup("FsBuffer", { clear = true })
 
 function fsb.setup(opts)
   fsb.cfg = vim.tbl_deep_extend("force", require("fsbuffer.config"), opts)
@@ -194,14 +195,16 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
   end
   self:update_root_dir_hightlight(path)
 
-  lines = lines or self.lines
   for row, line in ipairs(lines) do
+    local display_width = vim.fn.strdisplaywidth(line.name)
+    local padding_count = (self.max_name_width + 2) - display_width
+    local padded_text = line.name .. string.rep(" ", math.max(0, padding_count))
     vim.api.nvim_buf_set_lines(
       self.buf,
       row,
       row,
       false,
-      { ("%-" .. (self.max_name_width + 2) .. "s"):format(line.name) }
+      { padded_text }
     )
 
     local status = (
@@ -394,6 +397,20 @@ function fsb:watch()
       end
     end
   end, {})
+
+  vim.api.nvim_create_autocmd("CmdlineChanged", {
+    group = group,
+    buffer = self.buf,
+    callback = function()
+      local cmd = vim.fn.getcmdline()
+      if cmd:match("^%%s/") then
+        local new_cmd = "2,$" .. cmd:sub(2)
+        vim.fn.setcmdline(new_cmd)
+        local pos = vim.fn.getcmdpos()
+        vim.fn.setcmdpos(pos + 2)
+      end
+    end
+  })
 
   vim.api.nvim_create_autocmd("WinClosed", {
     buffer = self.buf,
