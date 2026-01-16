@@ -195,6 +195,7 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
   end
   self:update_root_dir_hightlight(path)
 
+  lines = lines or self.lines
   for row, line in ipairs(lines) do
     local display_width = vim.fn.strdisplaywidth(line.name)
     local padding_count = (self.max_name_width + 2) - display_width
