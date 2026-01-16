@@ -90,7 +90,7 @@ function keymaps:setup()
     -- enter parent dir
     {
       action = function()
-        self:update_buffer_render(vim.fs.dirname(self.cwd))
+        self:update_buffer_render(vim.fs.dirname(self.cwd) .. "/")
         -- 路径变化则清空搜索状态
         self.lines_idx_map = nil
       end,
@@ -137,7 +137,7 @@ function keymaps:setup()
         end
 
         if self.lines[idx].type == "directory" then
-          self:update_buffer_render(self.cwd .. "/" .. self.lines[idx].name:gsub("/+$", ""))
+          self:update_buffer_render(self.cwd .. "/" .. self.lines[idx].name)
         elseif self.lines[idx].type == "file" then
           self:close()
           vim.cmd.edit(self.cwd .. "/" .. self.lines[idx].name)

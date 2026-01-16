@@ -41,6 +41,44 @@ function fsb:set_window_max_width()
   )
 end
 
+function fsb:search_with_cmd_none()
+  -- clear idx map
+  self.lines_idx_map = nil
+
+  ---@type string
+  local path = self.cwd
+  if vim.startswith(path, vim.env.HOME) then
+    path = "~" .. path:sub(#vim.env.HOME + 1) .. "/"
+  end
+  local text = vim.api.nvim_buf_get_lines(self.buf, 0, 1, true)[1]
+
+  local search_path = (text:gsub("~", vim.env.HOME))
+  local stat = vim.uv.fs_stat(search_path)
+  if stat and stat.type == "directory" then
+    self:update_buffer_render(search_path)
+  elseif #text >= #path then
+    local search_words = text:gsub(path, "")
+    local total_valid_idx, total_idx = 1, 1
+    self.lines_idx_map = {}
+
+    self:update_buffer_render(
+      nil,
+      vim.tbl_filter(function(item)
+        if string.find(item.name, search_words) then
+          self.lines_idx_map[total_valid_idx] = total_idx
+          total_valid_idx = total_valid_idx + 1
+          total_idx = total_idx + 1
+          return true
+        end
+
+        total_idx = total_idx + 1
+        return false
+      end, self.lines),
+      true
+    )
+  end
+end
+
 function fsb.setup(opts)
   fsb.cfg = vim.tbl_deep_extend("force", require("fsbuffer.config"), opts)
 end
@@ -89,7 +127,7 @@ end
 
 function fsb:create_fs_buffer(dir)
   self.buf = vim.api.nvim_create_buf(false, true)
-  dir = dir or vim.uv.cwd()
+  dir = dir or vim.uv.cwd() .. "/"
 
   if self.cfg == nil then
     self.cfg = require("fsbuffer.config")
@@ -160,7 +198,7 @@ function fsb:scan(cwd)
 
   local handle = uv.fs_scandir(cwd)
   if not handle then
-    return
+    return false
   end
 
   while true do
@@ -170,6 +208,7 @@ function fsb:scan(cwd)
     end
     actions:query_path_detail(cwd, name)
   end
+  return true
 end
 
 function fsb:update_buffer_render(root_dir, lines, keep_title)
@@ -184,14 +223,16 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
   end
 
   if root_dir then
-    self.cwd = root_dir
-    self:scan(root_dir)
+    if self:scan(root_dir) then
+      self.cwd = root_dir:gsub("/+$", "")
+    end
   end
 
   -- render current path
+  --- @type string
   local path = self.cwd
   if vim.startswith(path, vim.env.HOME) then
-    path = "~" .. path:sub(#vim.env.HOME + 1) .. "/"
+    path = root_dir == self.cwd and "~" .. path:sub(#vim.env.HOME + 1) or "~" .. path:sub(#vim.env.HOME + 1) .. "/"
   end
   if not keep_title then
     vim.api.nvim_buf_set_lines(self.buf, 0, 1, false, { path })
@@ -257,39 +298,8 @@ function fsb:watch()
     callback = function()
       -- search mode
       if self.mode == "c" then
-        -- clear idx map
-        self.lines_idx_map = nil
-
-        local path = self.cwd
-        if vim.startswith(path, vim.env.HOME) then
-          path = "~" .. path:sub(#vim.env.HOME + 1) .. "/"
-        end
-        local text = vim.api.nvim_buf_get_lines(self.buf, 0, 1, true)[1]
-
-        local search_path = (text:gsub("~", vim.env.HOME))
-        local stat = vim.uv.fs_stat(search_path)
-        if stat and stat.type == "directory" then
-          self:update_buffer_render((search_path:gsub("/+$", "")))
-        elseif #text >= #path then
-          local search_words = text:gsub(path, "")
-          local total_valid_idx, total_idx = 1, 1
-          self.lines_idx_map = {}
-
-          self:update_buffer_render(
-            nil,
-            vim.tbl_filter(function(item)
-              if string.find(item.name, search_words) then
-                self.lines_idx_map[total_valid_idx] = total_idx
-                total_valid_idx = total_valid_idx + 1
-                total_idx = total_idx + 1
-                return true
-              end
-
-              total_idx = total_idx + 1
-              return false
-            end, self.lines),
-            true
-          )
+        if self.cfg.search_cmd == "none" then
+          self:search_with_cmd_none()
         end
       elseif not vim.tbl_isempty(self.edit.texts) then
         self.edit.modified = true
