@@ -156,6 +156,20 @@ function keymaps:setup()
       action = function()
         self.mode = "c"
         self.action = "normal"
+        vim.api.nvim_buf_attach(self.buf, false, {
+          on_lines = function(_, _, _, firstline, lastline, _)
+            if self.mode == "c" then
+              if firstline == 0 then
+                self.do_search = true
+              else
+                self.do_search = false
+              end
+            else
+              self.do_search = false
+              return true
+            end
+          end,
+        })
         vim.api.nvim_win_set_cursor(0, { 1, 0 })
         vim.cmd("startinsert!")
       end,
