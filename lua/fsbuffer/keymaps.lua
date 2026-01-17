@@ -219,7 +219,7 @@ function keymaps:setup()
           end)
         elseif mode == "\22" or mode == "v" then
           vim.schedule(function()
-            vim.cmd.Edit()
+            vim.cmd.FsEdit()
             for idx = self.edit.range.start_row, self.edit.range.end_row, 1 do
               vim.api.nvim_buf_set_text(
                 self.buf,
@@ -231,7 +231,7 @@ function keymaps:setup()
               )
             end
             self.edit.modified = true
-            vim.cmd.Rename()
+            vim.cmd.FsRename()
             return_normal()
           end)
         end

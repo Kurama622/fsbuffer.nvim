@@ -129,6 +129,55 @@ function fsb:create_fs_buffer(dir)
   self.buf = vim.api.nvim_create_buf(false, true)
   dir = dir or vim.uv.cwd() .. "/"
 
+  vim.api.nvim_buf_create_user_command(self.buf, "FsEdit", function()
+    if self.action == "add" then
+      return
+    end
+
+    self.last_cursor_row = vim.api.nvim_win_get_cursor(0)[1]
+    self.edit =
+      { range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {}, modified = false }
+    local mode = vim.api.nvim_get_mode().mode
+    if mode == "\22" or mode == "v" or mode == "V" or self.mode == "i" then
+      self.edit.range.start_row, self.edit.range.end_row, self.edit.range.start_col, self.edit.range.end_col =
+        actions:range()
+    else
+      self.edit.range.start_row, self.edit.range.end_row, self.edit.range.start_col, self.edit.range.end_col =
+        actions:visual_range()
+    end
+
+    for i = self.edit.range.start_row, self.edit.range.end_row, 1 do
+      table.insert(self.edit.texts, self.lines[i - 1].name)
+    end
+  end, {})
+
+  vim.api.nvim_buf_create_user_command(self.buf, "FsRename", function()
+    if not vim.tbl_isempty(self.edit.texts) then
+      if not self.edit.modified then
+        self:update_buffer_render()
+      else
+        vim.schedule(function()
+          local new_texts =
+            vim.api.nvim_buf_get_lines(self.buf, self.edit.range.start_row - 1, self.edit.range.end_row, true)
+
+          for i, raw_text in ipairs(self.edit.texts) do
+            actions:rename(
+              self.edit.range.start_row + i - 2,
+              self.cwd,
+              (raw_text:gsub("%s+$", "")),
+              (new_texts[i]:gsub("%s+$", ""))
+            )
+          end
+          self.edit = {
+            range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil },
+            texts = {},
+            modified = false,
+          }
+        end)
+      end
+    end
+  end, {})
+
   if self.cfg == nil then
     self.cfg = require("fsbuffer.config")
   end
@@ -177,7 +226,7 @@ function fsb:toggle(dir)
   self:create_fs_buffer(dir)
   self:create_fs_window()
 
-  self:watch()
+  self:event_watch()
 
   self.exist = true
 end
@@ -291,7 +340,7 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
   self:update_window()
 end
 
-function fsb:watch()
+function fsb:event_watch()
   vim.api.nvim_create_autocmd("TextChangedI", {
     group = fsb_group,
     buffer = self.buf,
@@ -335,7 +384,7 @@ function fsb:watch()
 
       -- visual block需要特殊处理
       self.mode = self.mode == "\22" and "\22" or "i"
-      vim.cmd.Edit()
+      vim.cmd.FsEdit()
     end,
   })
   vim.api.nvim_create_autocmd("InsertLeave", {
@@ -345,6 +394,7 @@ function fsb:watch()
       if self.mode == "c" then
         self.mode = "n"
         -- update root dir
+        --- @type string
         local path = self.cwd
         if vim.startswith(path, vim.env.HOME) then
           path = "~" .. path:sub(#vim.env.HOME + 1) .. "/"
@@ -358,7 +408,7 @@ function fsb:watch()
         return
       end
 
-      vim.cmd.Rename()
+      vim.cmd.FsRename()
       self.mode = "n"
 
       -- create
@@ -368,55 +418,6 @@ function fsb:watch()
       end
     end,
   })
-
-  vim.api.nvim_buf_create_user_command(self.buf, "Edit", function()
-    if self.action == "add" then
-      return
-    end
-
-    self.last_cursor_row = vim.api.nvim_win_get_cursor(0)[1]
-    self.edit =
-      { range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {}, modified = false }
-    local mode = vim.api.nvim_get_mode().mode
-    if mode == "\22" or mode == "v" or mode == "V" or self.mode == "i" then
-      self.edit.range.start_row, self.edit.range.end_row, self.edit.range.start_col, self.edit.range.end_col =
-        actions:range()
-    else
-      self.edit.range.start_row, self.edit.range.end_row, self.edit.range.start_col, self.edit.range.end_col =
-        actions:visual_range()
-    end
-
-    for i = self.edit.range.start_row, self.edit.range.end_row, 1 do
-      table.insert(self.edit.texts, self.lines[i - 1].name)
-    end
-  end, {})
-
-  vim.api.nvim_buf_create_user_command(self.buf, "Rename", function()
-    if not vim.tbl_isempty(self.edit.texts) then
-      if not self.edit.modified then
-        self:update_buffer_render()
-      else
-        vim.schedule(function()
-          local new_texts =
-            vim.api.nvim_buf_get_lines(self.buf, self.edit.range.start_row - 1, self.edit.range.end_row, true)
-
-          for i, raw_text in ipairs(self.edit.texts) do
-            actions:rename(
-              self.edit.range.start_row + i - 2,
-              self.cwd,
-              (raw_text:gsub("%s+$", "")),
-              (new_texts[i]:gsub("%s+$", ""))
-            )
-          end
-          self.edit = {
-            range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil },
-            texts = {},
-            modified = false,
-          }
-        end)
-      end
-    end
-  end, {})
 
   vim.api.nvim_create_autocmd("CmdlineChanged", {
     group = fsb_group,
