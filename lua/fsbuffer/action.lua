@@ -164,38 +164,40 @@ function actions:remove_all(t)
   for _, item in ipairs(t) do
     if item.type == "directory" then
       local function remove_dir(dir)
-        vim.uv.fs_rmdir(dir, function(err)
-          if err then
-            local handle = vim.uv.fs_scandir(dir)
-            if not handle then
-              return
-            end
+        local handle = vim.uv.fs_scandir(dir)
+        if not handle then
+          return
+        end
 
-            while true do
-              local name, type = vim.uv.fs_scandir_next(handle)
-              if not name then
-                break
+        while true do
+          local name, type = vim.uv.fs_scandir_next(handle)
+          if not name then
+            vim.uv.fs_rmdir(dir, function(err)
+              if err then
+                log.err(err)
               end
 
-              local p = dir .. "/" .. name
-
-              if type == "directory" then
-                remove_dir(p)
-              else
-                vim.uv.fs_unlink(p)
+              if dir == item.path .. "/" .. item.name then
+                table.remove(t, 1)
+                if vim.tbl_isempty(t) then
+                  tbl_remove_elements(self.lines, indices)
+                  vim.schedule(function()
+                    self:update_buffer_render()
+                  end)
+                end
               end
-            end
-            remove_dir(dir)
-          else
-            table.remove(t, 1)
-            if vim.tbl_isempty(t) then
-              tbl_remove_elements(self.lines, indices)
-              vim.schedule(function()
-                self:update_buffer_render()
-              end)
-            end
+            end)
+            return
           end
-        end)
+
+          local p = dir .. "/" .. name
+
+          if type == "directory" then
+            remove_dir(p)
+          else
+            vim.uv.fs_unlink(p)
+          end
+        end
       end
       remove_dir(item.path .. "/" .. item.name)
     elseif item.type == "file" then
