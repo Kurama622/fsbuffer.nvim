@@ -33,6 +33,15 @@ end
 local ns_id = vim.api.nvim_create_namespace("fsbuffer_highlights")
 local fsb_group = vim.api.nvim_create_augroup("FsBuffer", { clear = true })
 
+function fsb:set_indent_extmark(row)
+  vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
+    virt_text = { { "  ", "FsTitle" } },
+    virt_text_pos = "inline",
+    invalidate = true,
+    right_gravity = false,
+  })
+end
+
 function fsb:set_window_max_width()
   self.cfg.width = math.min(
     self.cfg.max_window_width,
@@ -378,11 +387,7 @@ function fsb:update_search_render()
 
   for row, line in ipairs(self.lines) do
     vim.api.nvim_buf_set_lines(self.buf, row, row, false, { line.name })
-    vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
-      virt_text = { { " ", "FsTitle" } },
-      virt_text_pos = "inline",
-      right_gravity = false,
-    })
+    self:set_indent_extmark(row)
 
     if line.match_pos then
       for _, col in ipairs(line.match_pos) do
@@ -575,7 +580,6 @@ function fsb:event_watch()
 
       -- create
       if self.action == "add" then
-        -- self.last_cursor_row = vim.api.nvim_win_get_cursor(0)[1]
         actions:create_and_render()
       end
     end,

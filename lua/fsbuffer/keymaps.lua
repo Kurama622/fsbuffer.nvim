@@ -7,6 +7,13 @@ local return_normal = function()
   keymaps.mode = "n"
 end
 
+local add_action = function(self)
+  local row = vim.api.nvim_buf_line_count(self.buf)
+  vim.api.nvim_buf_set_lines(self.buf, row, row, true, { "" })
+  self:set_indent_extmark(row)
+  vim.api.nvim_win_set_cursor(0, { row + 1, 0 })
+end
+
 local replace = function(new_char)
   local start_row, end_row, start_col, end_col = actions:range()
 
@@ -156,14 +163,13 @@ function keymaps:setup()
           return_normal()
           local cr = vim.api.nvim_replace_termcodes("<cr>", true, false, true)
           vim.api.nvim_feedkeys(cr, "m", true)
-          return ""
-        else
-          return "<cr>"
+        elseif self.action == "add" then
+          add_action(self)
         end
       end,
       mode = "i",
       key = "<cr>",
-      opts = { noremap = true, buffer = true, expr = true },
+      opts = { noremap = true, buffer = true },
     },
 
     -- search
@@ -201,9 +207,7 @@ function keymaps:setup()
           self:update_buffer_render()
         end
         self.action = "add"
-        local row = vim.api.nvim_buf_line_count(self.buf)
-        vim.api.nvim_buf_set_lines(self.buf, row, row, true, { "" })
-        vim.api.nvim_win_set_cursor(0, { row + 1, 0 })
+        add_action(self)
         vim.cmd.startinsert()
       end,
       mode = "n",
