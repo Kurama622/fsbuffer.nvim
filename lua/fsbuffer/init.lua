@@ -271,7 +271,7 @@ function fsb:create_fs_window()
   vim.bo[self.buf].bufhidden = "wipe"
   vim.bo[self.buf].swapfile = false
   vim.bo[self.buf].undolevels = -1
-  vim.b[self.buf].completion = false
+  vim.b[self.buf].completion = self.cfg.enable_completion
 
   vim.api.nvim_buf_set_name(self.buf, "fsbuffer")
   vim.cmd.syntax('match FsDir "[^[:space:]]\\+/"')
