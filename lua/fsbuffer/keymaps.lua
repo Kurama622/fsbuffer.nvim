@@ -316,6 +316,16 @@ function keymaps:setup()
       key = ":",
       opts = { noremap = true, buffer = true },
     },
+
+    -- others
+    {
+      action = function()
+        return "<esc>"
+      end,
+      mode = "i",
+      key = "<C-j>",
+      opts = { noremap = true, buffer = true, expr = true },
+    },
   }
 
   for _, map in ipairs(t) do

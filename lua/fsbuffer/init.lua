@@ -68,7 +68,18 @@ local function parse_fd_output(line, current_path)
 end
 
 function fsb:search_with_cmd_fd(search_words, path)
-  local search_cmd = { "fd", "-l", "-i", "-H", "--color", "never", search_words, path }
+  local search_cmd = {
+    "fd",
+    "-l",
+    "-i",
+    "-H",
+    "--max-depth",
+    tostring(self.cfg.search.max_depth),
+    "--color",
+    "never",
+    search_words,
+    path,
+  }
   if not vim.tbl_isempty(self.cfg.search.ignore) then
     for _, ignore in ipairs(self.cfg.search.ignore) do
       table.insert(search_cmd, "--exclude")
@@ -76,8 +87,8 @@ function fsb:search_with_cmd_fd(search_words, path)
     end
   end
 
-  self.search_id = self.search_id + 1
   local id = self.search_id
+  self.lines = {}
   return vim.system(search_cmd, {
     text = true,
     stdout = function(_, data)
@@ -85,21 +96,29 @@ function fsb:search_with_cmd_fd(search_words, path)
         return
       end
       if data then
-        self.lines = {}
+        local lines = {}
         for _, line in ipairs(vim.split(data, "\n")) do
           if #line > 0 then
             local entry = parse_fd_output(line, path)
-            table.insert(self.lines, entry)
+            table.insert(lines, entry)
           end
         end
 
-        vim.schedule(function()
-          self:update_search_render(search_words)
-        end)
+        if not vim.tbl_isempty(lines) then
+          vim.schedule(function()
+            self:merge_and_sort_search_res(search_words, lines, id)
+          end)
+        end
       end
     end,
   }, function()
+    if self.search_id ~= id then
+      return
+    end
     self.search_job = nil
+    vim.schedule(function()
+      self:update_search_render()
+    end)
   end)
 end
 
@@ -252,6 +271,7 @@ function fsb:create_fs_window()
   vim.bo[self.buf].bufhidden = "wipe"
   vim.bo[self.buf].swapfile = false
   vim.bo[self.buf].undolevels = -1
+  vim.b[self.buf].completion = false
 
   vim.api.nvim_buf_set_name(self.buf, "fsbuffer")
   vim.cmd.syntax('match FsDir "[^[:space:]]\\+/"')
@@ -306,18 +326,13 @@ function fsb:scan(cwd)
   return true
 end
 
-function fsb:update_search_render(search_words, lines)
-  -- clear buf text and extmarks
-  vim.api.nvim_buf_set_lines(self.buf, 1, -1, false, {})
-  local extmarks = vim.api.nvim_buf_get_extmarks(self.buf, ns_id, 0, -1, {})
-  for _, mark in ipairs(extmarks) do
-    vim.api.nvim_buf_del_extmark(self.buf, ns_id, mark[1])
+function fsb:merge_and_sort_search_res(search_words, lines, id)
+  if self.search_id ~= id then
+    return
   end
-  self:update_root_dir_hightlight(self.cwd:gsub(vim.env.HOME, "~"))
-
   local res = vim.fn.matchfuzzypos(
     vim
-      .iter(self.lines)
+      .iter(lines)
       :map(function(entry)
         return entry.name
       end)
@@ -325,9 +340,9 @@ function fsb:update_search_render(search_words, lines)
     search_words
   )
 
-  -- exclude: the paths containing the search term
+  -- exclude: the paths containing the search words
   local filters = {}
-  for _, entry in ipairs(self.lines) do
+  for _, entry in ipairs(lines) do
     for k, v in ipairs(res[1]) do
       if v == entry.name then
         entry.match_pos = res[2][k]
@@ -338,11 +353,22 @@ function fsb:update_search_render(search_words, lines)
     end
   end
 
-  table.sort(filters, function(a, b)
+  self.lines = vim.list_extend(self.lines, filters)
+
+  table.sort(self.lines, function(a, b)
     return a.score > b.score
   end)
+end
 
-  self.lines = filters
+function fsb:update_search_render()
+  -- clear buf text and extmarks
+  vim.api.nvim_buf_set_lines(self.buf, 1, -1, false, {})
+  local extmarks = vim.api.nvim_buf_get_extmarks(self.buf, ns_id, 0, -1, {})
+  for _, mark in ipairs(extmarks) do
+    vim.api.nvim_buf_del_extmark(self.buf, ns_id, mark[1])
+  end
+  self:update_root_dir_hightlight(self.cwd:gsub(vim.env.HOME, "~"))
+
   vim.api.nvim_buf_set_extmark(self.buf, ns_id, 0, 0, {
     virt_lines = {
       { { " " .. string.rep("─", self.cfg.width - 2) .. " ", "Comment" } },
@@ -469,7 +495,10 @@ function fsb:event_watch()
 
         local search_path = (text:gsub("~", vim.env.HOME))
         local stat = vim.uv.fs_stat(search_path)
-        if stat and stat.type == "directory" then
+        local stat_type = stat and stat.type or nil
+        local is_dir_search = search_path:sub(-1) == "/"
+        if is_dir_search and stat_type == "directory" then
+          self.search_id = self.search_id + 1
           self:update_buffer_render(search_path)
         elseif #text >= #path then
           local search_words = text:gsub(path, "")
@@ -479,6 +508,7 @@ function fsb:event_watch()
             if self.search_job then
               self.search_job:kill(9)
             end
+            self.search_id = self.search_id + 1
             self.search_job = self:search_with_cmd_fd(search_words, (path:gsub("~", vim.env.HOME)))
           end
         end

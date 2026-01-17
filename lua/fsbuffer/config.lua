@@ -6,6 +6,7 @@ return {
   indicator = "󰧞",
   delete_the_cut_on_close = false,
   search = {
+    max_depth = 5,
     cmd = "none", -- none, fd
     ignore = { ".git" },
   },
