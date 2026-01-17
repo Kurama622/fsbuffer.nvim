@@ -110,11 +110,13 @@ function actions:create_file_recursive(path)
 end
 
 function actions:create_and_render()
-  local name = vim.api.nvim_get_current_line()
-  if name:match("/$") then
-    actions:create_dir_recursive(name)
-  else
-    actions:create_file_recursive(name)
+  local lines = vim.api.nvim_buf_get_lines(self.buf, self.last_cursor_row - 1, -1, true)
+  for _, name in ipairs(lines) do
+    if name:match("/$") then
+      actions:create_dir_recursive(name)
+    else
+      actions:create_file_recursive(name)
+    end
   end
   self.action = "normal"
 

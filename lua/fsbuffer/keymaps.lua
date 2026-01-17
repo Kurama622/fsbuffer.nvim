@@ -150,6 +150,21 @@ function keymaps:setup()
       key = self.cfg.keymap.open,
       opts = { noremap = true, buffer = true },
     },
+    {
+      action = function()
+        if self.mode == "c" then
+          return_normal()
+          local cr = vim.api.nvim_replace_termcodes("<cr>", true, false, true)
+          vim.api.nvim_feedkeys(cr, "m", true)
+          return ""
+        else
+          return "<cr>"
+        end
+      end,
+      mode = "i",
+      key = "<cr>",
+      opts = { noremap = true, buffer = true, expr = true },
+    },
 
     -- search
     {

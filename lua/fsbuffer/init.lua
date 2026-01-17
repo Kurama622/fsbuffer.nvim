@@ -195,11 +195,11 @@ function fsb:create_fs_buffer(dir)
   dir = dir or vim.uv.cwd() .. "/"
 
   vim.api.nvim_buf_create_user_command(self.buf, "FsEdit", function()
+    self.last_cursor_row = vim.api.nvim_win_get_cursor(0)[1]
     if self.action == "add" then
       return
     end
 
-    self.last_cursor_row = vim.api.nvim_win_get_cursor(0)[1]
     self.edit =
       { range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {}, modified = false }
     local mode = vim.api.nvim_get_mode().mode
@@ -575,7 +575,7 @@ function fsb:event_watch()
 
       -- create
       if self.action == "add" then
-        self.last_cursor_row = vim.api.nvim_win_get_cursor(0)[1]
+        -- self.last_cursor_row = vim.api.nvim_win_get_cursor(0)[1]
         actions:create_and_render()
       end
     end,
