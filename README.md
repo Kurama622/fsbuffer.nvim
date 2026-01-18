@@ -1,5 +1,7 @@
 # fsbuffer.nvim
 
+https://github.com/user-attachments/assets/5e2b1baa-6d1a-4093-a269-6cda6fb8785c
+
 ## Installation
 
 ```lua
