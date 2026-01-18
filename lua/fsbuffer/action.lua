@@ -148,6 +148,9 @@ function actions:rename(t, idx, raw_dir, text, new_text)
     if vim.tbl_isempty(t) then
       vim.schedule(function()
         self:update_buffer_render()
+        if raw_dir ~= self.cwd then
+          vim.api.nvim_win_set_cursor(0, { vim.api.nvim_buf_line_count(0), 0 })
+        end
       end)
     end
   end)
@@ -268,6 +271,7 @@ function actions:paste_all(t)
 
   self.yank_list = {}
   self:update_buffer_render()
+  vim.api.nvim_win_set_cursor(0, { vim.api.nvim_buf_line_count(0), 0 })
 end
 
 return actions
