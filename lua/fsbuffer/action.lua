@@ -125,10 +125,10 @@ function actions:create_and_render()
   self:update_buffer_render()
 end
 
-function actions:rename(idx, raw_dir, text, new_text)
-  local t = "file"
+function actions:rename(t, idx, raw_dir, text, new_text)
+  local _type = "file"
   if new_text:sub(-1) == "/" then
-    t = "directory"
+    _type = "directory"
     new_text = new_text:sub(1, -2)
   end
   vim.uv.fs_rename(raw_dir .. "/" .. text, self.cwd .. "/" .. new_text, function(err)
@@ -136,7 +136,7 @@ function actions:rename(idx, raw_dir, text, new_text)
       log.error(err)
     end
     if raw_dir == self.cwd then
-      self.lines[idx].name = t == "directory" and new_text .. "/" or new_text
+      self.lines[idx].name = _type == "directory" and new_text .. "/" or new_text
       self.lines[idx].dired = false
 
       -- only update the current directory/file
@@ -144,8 +144,8 @@ function actions:rename(idx, raw_dir, text, new_text)
     else
       self:append_path_detail(self.cwd, new_text)
     end
-    table.remove(self.cut_list, 1)
-    if vim.tbl_isempty(self.cut_list) then
+    table.remove(t, 1)
+    if vim.tbl_isempty(t) then
       vim.schedule(function()
         self:update_buffer_render()
       end)
@@ -155,7 +155,7 @@ end
 
 function actions:rename_all(t)
   for _, item in ipairs(t) do
-    self:rename(item.idx, item.path, item.name, item.name)
+    self:rename(t, item.idx, item.path, item.name, item.name)
   end
 end
 

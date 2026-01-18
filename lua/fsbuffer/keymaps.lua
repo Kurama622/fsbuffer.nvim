@@ -126,7 +126,13 @@ function keymaps:setup()
         local texts = vim.api.nvim_buf_get_lines(0, start_row - 1, end_row, true)
 
         for i, text in ipairs(texts) do
-          actions:rename(start_row + i - 2, self.cwd, self.lines[start_row + i - 2].name, (text:gsub("%s+$", "")))
+          actions:rename(
+            texts,
+            start_row + i - 2,
+            self.cwd,
+            self.lines[start_row + i - 2].name,
+            (text:gsub("%s+$", ""))
+          )
         end
       end,
       mode = { "x", "n" },
@@ -322,7 +328,7 @@ function keymaps:setup()
                   self.cut_list,
                   { path = self.cwd, name = self.lines[i].name, ["type"] = self.lines[i].type }
                 )
-                actions:rename(i, self.cwd, self.lines[i].name, new_text)
+                actions:rename(self.cut_list, i, self.cwd, self.lines[i].name, new_text)
               end
             end
             vim.cmd("nohl")

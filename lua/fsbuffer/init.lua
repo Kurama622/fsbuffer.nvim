@@ -236,6 +236,7 @@ function fsb:create_fs_buffer(dir)
 
           for i, raw_text in ipairs(self.edit.texts) do
             actions:rename(
+              self.edit.texts,
               self.edit.range.start_row + i - 2,
               self.cwd,
               (raw_text:gsub("%s+$", "")),
