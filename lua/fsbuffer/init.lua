@@ -330,7 +330,7 @@ function fsb:scan(cwd)
     if not name then
       break
     end
-    actions:query_path_detail(cwd, name)
+    actions:append_path_detail(cwd, name)
   end
   return true
 end

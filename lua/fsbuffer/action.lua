@@ -39,7 +39,7 @@ function actions:visual_range()
   return start_row, end_row, start_col, end_col
 end
 
-function actions:update_path_detail(cwd, name)
+function actions:update_path_detail(idx, cwd, name)
   local stat = vim.uv.fs_stat(cwd .. "/" .. name)
   if stat then
     self.max_name_width = math.max(self.max_name_width, #name)
@@ -47,10 +47,12 @@ function actions:update_path_detail(cwd, name)
     self.max_user_width = math.max(self.max_user_width, #username)
     local date = format.friendly_time(stat.mtime.sec) or "nil"
     self.max_date_width = math.max(self.max_date_width, #date)
+    self.lines[idx].username = username
+    self.lines[idx].date = date
   end
 end
 
-function actions:query_path_detail(cwd, name)
+function actions:append_path_detail(cwd, name)
   local stat = vim.uv.fs_stat(cwd .. "/" .. name)
   if stat then
     local t = stat.type
@@ -86,7 +88,7 @@ function actions:create_dir_recursive(path)
   for i, part in ipairs(parts) do
     self:create_dir(base_dir, part)
     if i == 1 then
-      self:query_path_detail(self.cwd, part)
+      self:append_path_detail(self.cwd, part)
     end
     base_dir = base_dir .. "/" .. part
   end
@@ -104,7 +106,7 @@ function actions:create_file_recursive(path)
       base_dir = base_dir .. "/" .. part
     end
     if i == 1 then
-      self:query_path_detail(self.cwd, part)
+      self:append_path_detail(self.cwd, part)
     end
   end
 end
@@ -138,9 +140,9 @@ function actions:rename(idx, raw_dir, text, new_text)
       self.lines[idx].dired = false
 
       -- only update the current directory/file
-      self:update_path_detail(self.cwd, new_text)
+      self:update_path_detail(idx, self.cwd, new_text)
     else
-      self:query_path_detail(self.cwd, new_text)
+      self:append_path_detail(self.cwd, new_text)
     end
     table.remove(self.cut_list, 1)
     if vim.tbl_isempty(self.cut_list) then
@@ -261,7 +263,7 @@ function actions:paste_all(t)
     elseif item.type == "file" then
       vim.uv.fs_copyfile(src, desc)
     end
-    self:query_path_detail(self.cwd, basename)
+    self:append_path_detail(self.cwd, basename)
   end
 
   self.yank_list = {}
