@@ -1,13 +1,16 @@
 # fsbuffer.nvim
 
-## Install
+## Installation
 
 ```lua
-{
+  {
     "Kurama622/fsbuffer.nvim",
+    cmd = "Fsbuffer",
     opts = {
       search = {
-        cmd = "fd", -- none/fd
+        -- none | fd
+        -- fd depends on: https://github.com/sharkdp/fd
+        cmd = "fd",
       },
     },
     keys = {
@@ -28,6 +31,8 @@
     },
   }
 ```
+
+`:Fsbuffer` or use shortcut keys
 
 ## Reference
 
