@@ -276,6 +276,7 @@ function fsb:create_fs_window()
   vim.wo[self.win].relativenumber = false
   vim.wo[self.win].signcolumn = "no"
   vim.wo[self.win].spell = false
+  vim.wo[self.win].list = false
   vim.bo[self.buf].filetype = "fsbuffer"
   vim.bo[self.buf].buftype = "acwrite"
   vim.bo[self.buf].bufhidden = "wipe"
@@ -304,6 +305,9 @@ function fsb:toggle(dir)
 
   self:event_watch()
 
+  if self.cfg.start_with_search then
+    vim.api.nvim_feedkeys("/", "m", true)
+  end
   self.exist = true
 end
 
@@ -381,7 +385,7 @@ function fsb:update_search_render()
 
   vim.api.nvim_buf_set_extmark(self.buf, ns_id, 0, 0, {
     virt_lines = {
-      { { " " .. string.rep("─", self.cfg.width - 2) .. " ", "Comment" } },
+      { { " " .. string.rep("─", self.cfg.width - 2) .. " ", "FsSparator" } },
     },
     virt_lines_above = false,
   })
@@ -433,7 +437,7 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
   self:set_window_max_width()
   vim.api.nvim_buf_set_extmark(self.buf, ns_id, 0, 0, {
     virt_lines = {
-      { { " " .. string.rep("─", self.cfg.width - 2) .. " ", "Comment" } },
+      { { " " .. string.rep("─", self.cfg.width - 2) .. " ", "FsSparator" } },
     },
     virt_lines_above = false,
   })

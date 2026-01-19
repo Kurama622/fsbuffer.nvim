@@ -13,6 +13,7 @@ local highlight = {
   FsUser = { fg = "#d08770", default = true },
   FsDate = { fg = "#4c566a", default = true },
   FsMatch = { fg = "#d75f5f", default = true },
+  FsSeparator = { fg = "#6e7171", default = true },
 }
 
 for k, v in pairs(highlight) do

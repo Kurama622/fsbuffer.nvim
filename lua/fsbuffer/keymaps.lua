@@ -73,7 +73,7 @@ function keymaps:setup()
         end
       end,
       mode = "n",
-      key = "j",
+      key = { "j", "<C-j>" },
       opts = { noremap = true, buffer = true, expr = true },
     },
 
@@ -90,7 +90,7 @@ function keymaps:setup()
         return "k"
       end,
       mode = "n",
-      key = "k",
+      key = { "k", "<C-k>" },
       opts = { noremap = true, buffer = true, expr = true },
     },
 
@@ -163,6 +163,7 @@ function keymaps:setup()
       key = self.cfg.keymap.open,
       opts = { noremap = true, buffer = true },
     },
+
     {
       action = function()
         if self.mode == "c" then
@@ -178,13 +179,23 @@ function keymaps:setup()
       opts = { noremap = true, buffer = true },
     },
 
+    -- close
+    {
+      action = function()
+        self:close()
+      end,
+      mode = "n",
+      key = self.cfg.keymap.close,
+      opts = { noremap = true, buffer = true },
+    },
+
     -- search
     {
       action = function()
         self.mode = "c"
         self.action = "normal"
         vim.api.nvim_buf_attach(self.buf, false, {
-          on_lines = function(_, _, _, firstline, lastline, _)
+          on_lines = function(_, _, _, firstline, _, _)
             if self.mode == "c" then
               if firstline == 0 then
                 self.do_search = true
@@ -217,7 +228,7 @@ function keymaps:setup()
         vim.cmd.startinsert()
       end,
       mode = "n",
-      key = "o",
+      key = { "o", "O" },
       opts = { noremap = true, buffer = true },
     },
 
@@ -226,7 +237,11 @@ function keymaps:setup()
       action = function()
         if vim.api.nvim_get_mode().mode == "n" then
           vim.api.nvim_feedkeys("vd", "m", true)
-        elseif vim.api.nvim_get_mode().mode == "\22" then
+        elseif
+          vim.api.nvim_get_mode().mode == "\22"
+          or vim.api.nvim_get_mode().mode == "v"
+          or vim.api.nvim_get_mode().mode == "V"
+        then
           vim.api.nvim_feedkeys("d", "m", true)
         end
       end,
@@ -309,7 +324,7 @@ function keymaps:setup()
         return "p"
       end,
       mode = { "x", "n" },
-      key = "p",
+      key = { "p", "P" },
       opts = { noremap = true, buffer = true, expr = true },
     },
 
@@ -354,7 +369,13 @@ function keymaps:setup()
   }
 
   for _, map in ipairs(t) do
-    vim.keymap.set(map.mode, map.key, map.action, map.opts)
+    if type(map.key) == "string" then
+      vim.keymap.set(map.mode, map.key, map.action, map.opts)
+    elseif type(map.key) == "table" then
+      for _, key in ipairs(map.key) do
+        vim.keymap.set(map.mode, key, map.action, map.opts)
+      end
+    end
   end
 end
 

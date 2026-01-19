@@ -6,6 +6,7 @@ return {
   indicator = "󰧞",
   delete_the_cut_on_close = false,
   enable_completion = false,
+  start_with_search = true,
   search = {
     max_depth = 5,
     cmd = "none", -- none/fd
@@ -14,5 +15,6 @@ return {
   keymap = {
     enter_parent_dir = "<backspace>",
     open = "<cr>",
+    close = "<esc>",
   },
 }
