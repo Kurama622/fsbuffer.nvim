@@ -616,7 +616,7 @@ function fsb:event_watch()
     group = fsb_group,
     buffer = self.buf,
     callback = function()
-      self.last_cursor_row = vim.api.nvim_buf_line_count(self.buf) - #self.cut_list
+      self.last_cursor_row = vim.api.nvim_win_get_cursor(self.win)[1] - 1
       actions:remove_all(self.cut_list)
       vim.bo[self.buf].modified = false
     end,

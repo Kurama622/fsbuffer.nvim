@@ -72,7 +72,6 @@ function actions:append_path_detail(cwd, name)
       ["date"] = date,
       ["dired"] = false,
     })
-    self.last_cursor_row = vim.api.nvim_buf_line_count(self.buf)
   end
 end
 
@@ -150,6 +149,9 @@ function actions:rename(t, idx, raw_dir, text, new_text)
     if vim.tbl_isempty(t) then
       vim.schedule(function()
         self:update_buffer_render()
+        if raw_dir ~= self.cwd then
+          vim.api.nvim_win_set_cursor(self.win, { vim.api.nvim_buf_line_count(self.buf), 0 })
+        end
       end)
     end
   end)
@@ -178,7 +180,7 @@ function actions:remove_all(t)
           if not name then
             vim.uv.fs_rmdir(dir, function(err)
               if err then
-                log.err(err)
+                log.error(err)
               end
 
               if dir == item.path .. "/" .. item.name then
@@ -270,6 +272,7 @@ function actions:paste_all(t)
 
   self.yank_list = {}
   self:update_buffer_render()
+  vim.api.nvim_win_set_cursor(self.win, { vim.api.nvim_buf_line_count(self.buf), 0 })
 end
 
 return actions
