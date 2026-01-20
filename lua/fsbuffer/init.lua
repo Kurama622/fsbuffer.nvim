@@ -76,29 +76,46 @@ local function parse_fd_output(line, current_path)
   return entry
 end
 
-function fsb:search_with_cmd_fd(search_words, path)
-  local search_cmd = {
-    "fd",
-    "-l",
-    "-i",
-    "-H",
-    "--max-depth",
-    tostring(self.cfg.search.max_depth),
-    "--color",
-    "never",
-    search_words,
-    path,
-  }
-  if not vim.tbl_isempty(self.cfg.search.ignore) then
-    for _, ignore in ipairs(self.cfg.search.ignore) do
-      table.insert(search_cmd, "--exclude")
-      table.insert(search_cmd, ignore)
+function fsb:make_search_cmd(search_words, path)
+  if self.cfg.search.cmd == "fd" then
+    local search_cmd = {
+      "fd",
+      "-a",
+      "-i",
+      "-H",
+      "--max-depth",
+      tostring(self.cfg.search.max_depth),
+      "--color",
+      "never",
+      search_words,
+      path,
+    }
+    if not vim.tbl_isempty(self.cfg.search.ignore) then
+      for _, ignore in ipairs(self.cfg.search.ignore) do
+        table.insert(search_cmd, "--exclude")
+        table.insert(search_cmd, ignore)
+      end
     end
+    return search_cmd
+  elseif self.cfg.search.cmd == "fzf-fd" then
+    local cmd_string = ("fd -a -i -H --max-depth %s --color never . %s"):format(
+      self.cfg.search.max_depth,
+      vim.fn.shellescape(path)
+    )
+    if not vim.tbl_isempty(self.cfg.search.ignore) then
+      for _, ignore in ipairs(self.cfg.search.ignore) do
+        cmd_string = cmd_string .. " --exclude " .. ignore
+      end
+    end
+    cmd_string = cmd_string .. " | fzf -f " .. vim.fn.shellescape(search_words)
+    return { "sh", "-c", cmd_string }
   end
+end
 
+function fsb:search_with_cmd(search_words, path)
   local id = self.search_id
   self.lines = {}
-  return vim.system(search_cmd, {
+  return vim.system(self:make_search_cmd(search_words, path), {
     text = true,
     stdout = function(_, data)
       if self.search_id ~= id then
@@ -108,8 +125,8 @@ function fsb:search_with_cmd_fd(search_words, path)
         local lines = {}
         for _, line in ipairs(vim.split(data, "\n")) do
           if #line > 0 then
-            local entry = parse_fd_output(line, path)
-            table.insert(lines, entry)
+            local t = line:sub(-1) == "/" and "directory" or "file"
+            table.insert(lines, { name = line:sub(#self.cwd + 2), ["type"] = t })
           end
         end
 
@@ -131,7 +148,7 @@ function fsb:search_with_cmd_fd(search_words, path)
   end)
 end
 
-function fsb:search_with_cmd_none(search_words)
+function fsb:search_builtin(search_words)
   local total_valid_idx, total_idx = 1, 1
   self.lines_idx_map = {}
 
@@ -513,13 +530,13 @@ function fsb:event_watch()
         elseif #text >= #path then
           local search_words = text:gsub(path, "")
           if self.cfg.search.cmd == "none" then
-            self:search_with_cmd_none(search_words)
-          elseif self.cfg.search.cmd == "fd" then
+            self:search_builtin(search_words)
+          elseif self.cfg.search.cmd == "fd" or self.cfg.search.cmd == "fzf-fd" then
             if self.search_job then
               self.search_job:kill(9)
             end
             self.search_id = self.search_id + 1
-            self.search_job = self:search_with_cmd_fd(search_words, (path:gsub("~", vim.env.HOME)))
+            self.search_job = self:search_with_cmd(search_words, (path:gsub("~", vim.env.HOME)))
           end
         end
       elseif not vim.tbl_isempty(self.edit.texts) then

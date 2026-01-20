@@ -9,7 +9,7 @@ return {
   start_with_search = true,
   search = {
     max_depth = 5,
-    cmd = "none", -- none/fd
+    cmd = "none", -- none/fd/fzf-fd
     ignore = { ".git" },
   },
   keymap = {
