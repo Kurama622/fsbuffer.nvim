@@ -1,5 +1,7 @@
 # fsbuffer.nvim
 
+Support fuzzy search
+
 https://github.com/user-attachments/assets/5e2b1baa-6d1a-4093-a269-6cda6fb8785c
 
 ## Installation
@@ -10,8 +12,11 @@ https://github.com/user-attachments/assets/5e2b1baa-6d1a-4093-a269-6cda6fb8785c
     cmd = "Fsbuffer",
     opts = {
       search = {
-        -- none | fd
+        -- none | fd | fzf-fd
         -- fd depends on: https://github.com/sharkdp/fd
+        -- fzf-fd depends on: 
+        --    1. https://github.com/sharkdp/fd
+        --    2. https://github.com/junegunn/fzf
         cmd = "fd",
       },
     },
