@@ -483,12 +483,18 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
       right_gravity = false,
     })
 
-    local texts = {
-      { ("%-11s "):format(line.mode), "FsMode" },
-      { ("%-" .. (self.max_user_width + 2) .. "s "):format(line.username), "FsUser" },
-      { ("%-10s "):format(line.size), "FsSize" },
-      { ("%-" .. (self.max_date_width + 2) .. "s "):format(line.date), "FsDate" },
-    }
+    local texts = {}
+    for _, text in ipairs({
+      { format = "%-11s ", attr = line.mode, hl = "FsMode" },
+      { format = "%-" .. (self.max_user_width + 2) .. "s ", attr = line.username, hl = "FsUser" },
+      { format = "%-10s ", attr = line.size, hl = "FsSize" },
+      { format = "%-" .. (self.max_date_width + 2) .. "s ", attr = line.date, hl = "FsDate" },
+    }) do
+      if text.attr then
+        table.insert(texts, { (text.format):format(text.attr), text.hl })
+      end
+    end
+
     vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
       hl_mode = "combine",
       virt_text = texts,
@@ -565,6 +571,8 @@ function fsb:event_watch()
       -- 首行插入为搜索
       if vim.api.nvim_win_get_cursor(0)[1] == 1 then
         self.mode = "c"
+      else
+        self.lines_idx_map = nil
       end
 
       if self.mode == "c" then
