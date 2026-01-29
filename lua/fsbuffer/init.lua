@@ -442,9 +442,9 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
 
   -- render current path
   --- @type string
-  local path = self.cwd
+  local path = root_dir == self.cwd and self.cwd or self.cwd .. "/"
   if vim.startswith(path, vim.env.HOME) then
-    path = root_dir == self.cwd and "~" .. path:sub(#vim.env.HOME + 1) or "~" .. path:sub(#vim.env.HOME + 1) .. "/"
+    path = "~" .. path:sub(#vim.env.HOME + 1)
   end
   if not keep_title then
     vim.api.nvim_buf_set_lines(self.buf, 0, 1, false, { path })
@@ -520,9 +520,9 @@ function fsb:event_watch()
         self.lines_idx_map = nil
 
         ---@type string
-        local path = self.cwd
+        local path = self.cwd .. "/"
         if vim.startswith(path, vim.env.HOME) then
-          path = "~" .. path:sub(#vim.env.HOME + 1) .. "/"
+          path = "~" .. path:sub(#vim.env.HOME + 1)
         end
         local text = vim.api.nvim_buf_get_lines(self.buf, 0, 1, true)[1]
 
@@ -592,9 +592,9 @@ function fsb:event_watch()
         self.mode = "n"
         -- update root dir
         --- @type string
-        local path = self.cwd
+        local path = self.cwd .. "/"
         if vim.startswith(path, vim.env.HOME) then
-          path = "~" .. path:sub(#vim.env.HOME + 1) .. "/"
+          path = "~" .. path:sub(#vim.env.HOME + 1)
         end
         local text = vim.api.nvim_buf_get_lines(self.buf, 0, 1, true)[1]
         if #text < #path then
