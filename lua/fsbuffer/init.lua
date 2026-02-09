@@ -534,7 +534,7 @@ function fsb:event_watch()
           self.search_id = self.search_id + 1
           self:update_buffer_render(search_path)
         elseif #text >= #path then
-          local search_words = text:gsub(path, "")
+          local search_words = text:sub(#path + 1)
           if self.cfg.search.cmd == "none" then
             self:search_builtin(search_words)
           elseif self.cfg.search.cmd == "fd" or self.cfg.search.cmd == "fzf-fd" then
