@@ -52,30 +52,6 @@ function fsb:set_window_max_width()
   )
 end
 
-local function parse_fd_output(line, current_path)
-  if #line == 0 then
-    return nil
-  end
-
-  local entry = {}
-  local data = vim
-    .iter(vim.split(line, "%s"))
-    :map(function(item)
-      if #item > 0 then
-        return item
-      end
-    end)
-    :totable()
-  if #data < 9 then
-    return
-  end
-  entry.mode = data[1]:gsub("@$", "")
-  entry.type = entry.mode:sub(1, 1) == "d" and "directory" or "file"
-  local name = data[9]:sub(#current_path + 1)
-  entry.name = entry.type == "directory" and name .. "/" or name
-  return entry
-end
-
 function fsb:make_search_cmd(search_words, path)
   if self.cfg.search.cmd == "fd" then
     local search_cmd = {
@@ -214,6 +190,8 @@ function fsb:close()
   self.search_id = 0
   self.mode = "n"
   self.action = "normal"
+  self.cfg.height, self.cfg.width = nil, nil
+  self.cfg.row, self.cfg.col = nil, nil
 end
 
 function fsb:create_fs_buffer(dir)
