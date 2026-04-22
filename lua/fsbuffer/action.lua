@@ -71,6 +71,7 @@ function actions:append_path_detail(cwd, name)
       ["username"] = username,
       ["date"] = date,
       ["dired"] = false,
+      ["mtime"] = stat.mtime.sec,
     })
   end
 end

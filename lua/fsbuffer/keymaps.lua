@@ -357,6 +357,23 @@ function keymaps:setup()
       opts = { noremap = true, buffer = true },
     },
 
+    -- sort by time
+    {
+      action = function()
+        table.sort(self.lines, function(a, b)
+          if a.mtime and b.mtime then
+            return a.mtime > b.mtime
+          end
+          vim.notify_once("Search mode does not support sorting by time.", vim.log.levels.WARN, { title = "Fsbuffer" })
+          return false
+        end)
+        self:update_buffer_render()
+      end,
+      mode = "n",
+      key = "S",
+      opts = { noremap = true, buffer = true },
+    },
+
     -- others
     {
       action = function()
