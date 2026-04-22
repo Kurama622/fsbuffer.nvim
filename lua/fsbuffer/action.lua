@@ -19,7 +19,9 @@ function actions:range()
   local start_row, start_col = start_pos[2], start_pos[3]
   local end_row, end_col = end_pos[2], end_pos[3]
 
-  if start_row > end_row or (start_row == end_row and start_col > end_col) then
+  if
+    start_row > end_row or (start_row == end_row and start_col > end_col)
+  then
     start_row, end_row = end_row, start_row
     start_col, end_col = end_col, start_col
   end
@@ -32,7 +34,9 @@ function actions:visual_range()
   local start_row, start_col = start_pos[2], start_pos[3]
   local end_row, end_col = end_pos[2], end_pos[3]
 
-  if start_row > end_row or (start_row == end_row and start_col > end_col) then
+  if
+    start_row > end_row or (start_row == end_row and start_col > end_col)
+  then
     start_row, end_row = end_row, start_row
     start_col, end_col = end_col, start_col
   end
@@ -114,7 +118,8 @@ function actions:create_file_recursive(path)
 end
 
 function actions:create_and_render()
-  local lines = vim.api.nvim_buf_get_lines(self.buf, self.last_cursor_row - 1, -1, true)
+  local lines =
+    vim.api.nvim_buf_get_lines(self.buf, self.last_cursor_row - 1, -1, true)
   for _, name in ipairs(lines) do
     if name:match("/$") then
       actions:create_dir_recursive(name)
@@ -133,29 +138,37 @@ function actions:rename(t, idx, raw_dir, text, new_text)
     _type = "directory"
     new_text = new_text:sub(1, -2)
   end
-  vim.uv.fs_rename(raw_dir .. "/" .. text, self.cwd .. "/" .. new_text, function(err)
-    if err then
-      log.error(err)
-    end
-    if raw_dir == self.cwd then
-      self.lines[idx].name = _type == "directory" and new_text .. "/" or new_text
-      self.lines[idx].dired = false
+  vim.uv.fs_rename(
+    raw_dir .. "/" .. text,
+    self.cwd .. "/" .. new_text,
+    function(err)
+      if err then
+        log.error(err)
+      end
+      if raw_dir == self.cwd then
+        self.lines[idx].name = _type == "directory" and new_text .. "/"
+          or new_text
+        self.lines[idx].dired = false
 
-      -- only update the current directory/file
-      self:update_path_detail(idx, self.cwd, new_text)
-    else
-      self:append_path_detail(self.cwd, new_text)
+        -- only update the current directory/file
+        self:update_path_detail(idx, self.cwd, new_text)
+      else
+        self:append_path_detail(self.cwd, new_text)
+      end
+      table.remove(t, 1)
+      if vim.tbl_isempty(t) then
+        vim.schedule(function()
+          self:update_buffer_render()
+          if raw_dir ~= self.cwd then
+            vim.api.nvim_win_set_cursor(
+              self.win,
+              { vim.api.nvim_buf_line_count(self.buf), 0 }
+            )
+          end
+        end)
+      end
     end
-    table.remove(t, 1)
-    if vim.tbl_isempty(t) then
-      vim.schedule(function()
-        self:update_buffer_render()
-        if raw_dir ~= self.cwd then
-          vim.api.nvim_win_set_cursor(self.win, { vim.api.nvim_buf_line_count(self.buf), 0 })
-        end
-      end)
-    end
-  end)
+  )
 end
 
 function actions:rename_all(t)
@@ -226,7 +239,8 @@ end
 
 function actions:paste_all(t)
   for _, item in ipairs(t) do
-    local basename = item.type == "directory" and item.name:sub(1, -2) or item.name
+    local basename = item.type == "directory" and item.name:sub(1, -2)
+      or item.name
     local src = item.path .. "/" .. basename
     local desc = self.cwd .. "/" .. basename
     if src == desc then
@@ -273,7 +287,10 @@ function actions:paste_all(t)
 
   self.yank_list = {}
   self:update_buffer_render()
-  vim.api.nvim_win_set_cursor(self.win, { vim.api.nvim_buf_line_count(self.buf), 0 })
+  vim.api.nvim_win_set_cursor(
+    self.win,
+    { vim.api.nvim_buf_line_count(self.buf), 0 }
+  )
 end
 
 return actions

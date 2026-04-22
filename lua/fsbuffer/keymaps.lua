@@ -18,7 +18,14 @@ local replace = function(new_char)
   local start_row, end_row, start_col, end_col = actions:range()
 
   for lnum = start_row, end_row, 1 do
-    vim.api.nvim_buf_set_text(0, lnum - 1, start_col - 1, lnum - 1, end_col, { new_char })
+    vim.api.nvim_buf_set_text(
+      0,
+      lnum - 1,
+      start_col - 1,
+      lnum - 1,
+      end_col,
+      { new_char }
+    )
   end
   return_normal()
   return start_row, end_row
@@ -113,7 +120,8 @@ function keymaps:setup()
         vim.opt.guicursor:append("a:hor20-blinkon200")
         local char_code = vim.fn.getchar()
         vim.opt.guicursor = old_cursor
-        local char = type(char_code) == "number" and vim.fn.nr2char(char_code) or char_code
+        local char = type(char_code) == "number" and vim.fn.nr2char(char_code)
+          or char_code
 
         self.mode = "r"
         if char_code == 27 then
@@ -123,7 +131,8 @@ function keymaps:setup()
         local start_row, end_row = replace(char)
         self.last_cursor_row = start_row
 
-        local texts = vim.api.nvim_buf_get_lines(0, start_row - 1, end_row, true)
+        local texts =
+          vim.api.nvim_buf_get_lines(0, start_row - 1, end_row, true)
 
         for i, text in ipairs(texts) do
           actions:rename(
@@ -261,7 +270,12 @@ function keymaps:setup()
           for i = start_row, end_row, 1 do
             table.insert(
               self.cut_list,
-              { path = self.cwd, name = self.lines[i - 1].name, ["type"] = self.lines[i - 1].type, idx = i - 1 }
+              {
+                path = self.cwd,
+                name = self.lines[i - 1].name,
+                ["type"] = self.lines[i - 1].type,
+                idx = i - 1,
+              }
             )
             self.lines[i - 1].dired = true
           end
@@ -303,7 +317,11 @@ function keymaps:setup()
         for i = start_row, end_row, 1 do
           table.insert(
             self.yank_list,
-            { path = self.cwd, name = self.lines[i - 1].name, ["type"] = self.lines[i - 1].type }
+            {
+              path = self.cwd,
+              name = self.lines[i - 1].name,
+              ["type"] = self.lines[i - 1].type,
+            }
           )
         end
         return "y"
@@ -337,13 +355,27 @@ function keymaps:setup()
         vim.api.nvim_buf_attach(0, false, {
           on_lines = function(_, _, _, firstline, lastline, new_lastline)
             for i = firstline, new_lastline - 1 do
-              local new_text = (vim.api.nvim_buf_get_lines(0, i, i + 1, true)[1]:gsub("%s+$", ""))
+              local new_text = (
+                vim.api
+                  .nvim_buf_get_lines(0, i, i + 1, true)[1]
+                  :gsub("%s+$", "")
+              )
               if new_text ~= self.lines[i].name then
                 table.insert(
                   self.cut_list,
-                  { path = self.cwd, name = self.lines[i].name, ["type"] = self.lines[i].type }
+                  {
+                    path = self.cwd,
+                    name = self.lines[i].name,
+                    ["type"] = self.lines[i].type,
+                  }
                 )
-                actions:rename(self.cut_list, i, self.cwd, self.lines[i].name, new_text)
+                actions:rename(
+                  self.cut_list,
+                  i,
+                  self.cwd,
+                  self.lines[i].name,
+                  new_text
+                )
               end
             end
             vim.cmd("nohl")
@@ -364,7 +396,11 @@ function keymaps:setup()
           if a.mtime and b.mtime then
             return a.mtime > b.mtime
           end
-          vim.notify_once("Search mode does not support sorting by time.", vim.log.levels.WARN, { title = "Fsbuffer" })
+          vim.notify_once(
+            "Search mode does not support sorting by time.",
+            vim.log.levels.WARN,
+            { title = "Fsbuffer" }
+          )
           return false
         end)
         self:update_buffer_render()

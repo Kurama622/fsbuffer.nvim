@@ -57,6 +57,7 @@ https://github.com/user-attachments/assets/5e2b1baa-6d1a-4093-a269-6cda6fb8785c
 | `y`: Same as vim | `n`/`v`         | copy                                               |
 | `p` / `P`        | `n`             | paste                                              |
 | `:`              | `n`             | cmdline                                            |
+| `S`              | `n`             | sort by time                                       |
 | `Ctrl-j`         | `i`             | exit search                                        |
 
 ## Reference

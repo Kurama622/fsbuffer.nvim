@@ -13,12 +13,17 @@ local fsb = {
   yank_list = {},
   mode = "n",
   action = "normal",
-  edit = { range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {}, modified = false },
+  edit = {
+    range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil },
+    texts = {},
+    modified = false,
+  },
   buf = nil,
   win = nil,
 }
 
-local actions, keymaps = require("fsbuffer.action"), require("fsbuffer.keymaps")
+local actions, keymaps =
+  require("fsbuffer.action"), require("fsbuffer.keymaps")
 
 for _, t in ipairs({ actions, keymaps }) do
   setmetatable(t, {
@@ -46,7 +51,9 @@ function fsb:set_window_max_width()
   self.cfg.width = math.min(
     self.cfg.max_window_width,
     math.max(
-      vim.api.nvim_strwidth(self.cwd) - vim.api.nvim_strwidth(vim.env.HOME) + 2,
+      vim.api.nvim_strwidth(self.cwd)
+        - vim.api.nvim_strwidth(vim.env.HOME)
+        + 2,
       self.max_name_width + self.max_user_width + self.max_date_width + 33
     )
   )
@@ -83,7 +90,9 @@ function fsb:make_search_cmd(search_words, path)
         cmd_string = cmd_string .. " --exclude " .. ignore
       end
     end
-    cmd_string = cmd_string .. " | fzf -f " .. vim.fn.shellescape(search_words)
+    cmd_string = cmd_string
+      .. " | fzf -f "
+      .. vim.fn.shellescape(search_words)
     return { "sh", "-c", cmd_string }
   end
 end
@@ -102,7 +111,10 @@ function fsb:search_with_cmd(search_words, path)
         for _, line in ipairs(vim.split(data, "\n")) do
           if #line > 0 then
             local t = line:sub(-1) == "/" and "directory" or "file"
-            table.insert(lines, { name = line:sub(#self.cwd + 2), ["type"] = t })
+            table.insert(
+              lines,
+              { name = line:sub(#self.cwd + 2), ["type"] = t }
+            )
           end
         end
 
@@ -150,10 +162,13 @@ function fsb.setup(opts)
 end
 
 function fsb:init_window_config()
-  self.cfg.height = self.cfg.height or math.floor(vim.o.lines * self.cfg.height_ratio)
+  self.cfg.height = self.cfg.height
+    or math.floor(vim.o.lines * self.cfg.height_ratio)
   self:set_window_max_width()
-  self.cfg.row = self.cfg.row or math.floor((vim.o.lines - self.cfg.height) / 2)
-  self.cfg.col = self.cfg.col or math.floor((vim.o.columns - self.cfg.width) / 2)
+  self.cfg.row = self.cfg.row
+    or math.floor((vim.o.lines - self.cfg.height) / 2)
+  self.cfg.col = self.cfg.col
+    or math.floor((vim.o.columns - self.cfg.width) / 2)
 end
 
 function fsb:update_window()
@@ -169,7 +184,11 @@ function fsb:update_window()
       width = self.cfg.width,
     })
     if self.mode ~= "c" then
-      pcall(vim.api.nvim_win_set_cursor, self.win, { self.last_cursor_row, 0 })
+      pcall(
+        vim.api.nvim_win_set_cursor,
+        self.win,
+        { self.last_cursor_row, 0 }
+      )
       self.last_cursor_row = 1
     end
   end
@@ -204,8 +223,16 @@ function fsb:create_fs_buffer(dir)
       return
     end
 
-    self.edit =
-      { range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil }, texts = {}, modified = false }
+    self.edit = {
+      range = {
+        start_row = nil,
+        end_row = nil,
+        start_col = nil,
+        end_col = nil,
+      },
+      texts = {},
+      modified = false,
+    }
     local mode = vim.api.nvim_get_mode().mode
     if mode == "\22" or mode == "v" or mode == "V" or self.mode == "i" then
       self.edit.range.start_row, self.edit.range.end_row, self.edit.range.start_col, self.edit.range.end_col =
@@ -226,8 +253,12 @@ function fsb:create_fs_buffer(dir)
         self:update_buffer_render()
       else
         vim.schedule(function()
-          local new_texts =
-            vim.api.nvim_buf_get_lines(self.buf, self.edit.range.start_row - 1, self.edit.range.end_row, true)
+          local new_texts = vim.api.nvim_buf_get_lines(
+            self.buf,
+            self.edit.range.start_row - 1,
+            self.edit.range.end_row,
+            true
+          )
 
           for i, raw_text in ipairs(self.edit.texts) do
             actions:rename(
@@ -239,7 +270,12 @@ function fsb:create_fs_buffer(dir)
             )
           end
           self.edit = {
-            range = { start_row = nil, end_row = nil, start_col = nil, end_col = nil },
+            range = {
+              start_row = nil,
+              end_row = nil,
+              start_col = nil,
+              end_col = nil,
+            },
             texts = {},
             modified = false,
           }
@@ -380,7 +416,9 @@ function fsb:update_search_render()
 
   vim.api.nvim_buf_set_extmark(self.buf, ns_id, 0, 0, {
     virt_lines = {
-      { { " " .. string.rep("─", self.cfg.width - 2) .. " ", "FsSparator" } },
+      {
+        { " " .. string.rep("─", self.cfg.width - 2) .. " ", "FsSparator" },
+      },
     },
     virt_lines_above = false,
   })
@@ -432,7 +470,9 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
   self:set_window_max_width()
   vim.api.nvim_buf_set_extmark(self.buf, ns_id, 0, 0, {
     virt_lines = {
-      { { " " .. string.rep("─", self.cfg.width - 2) .. " ", "FsSparator" } },
+      {
+        { " " .. string.rep("─", self.cfg.width - 2) .. " ", "FsSparator" },
+      },
     },
     virt_lines_above = false,
   })
@@ -441,7 +481,8 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
   for row, line in ipairs(lines) do
     local display_width = vim.fn.strdisplaywidth(line.name)
     local padding_count = (self.max_name_width + 2) - display_width
-    local padded_text = line.name .. string.rep(" ", math.max(0, padding_count))
+    local padded_text = line.name
+      .. string.rep(" ", math.max(0, padding_count))
     vim.api.nvim_buf_set_lines(self.buf, row, row, false, { padded_text })
 
     local status = (
@@ -455,18 +496,27 @@ function fsb:update_buffer_render(root_dir, lines, keep_title)
     )
         and " " .. self.cfg.indicator
       or string.rep(" ", vim.fn.strdisplaywidth(self.cfg.indicator) + 1)
-    lines[row].dired_id = vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
-      virt_text = { { status, "FsTitle" } },
-      virt_text_pos = "inline",
-      right_gravity = false,
-    })
+    lines[row].dired_id =
+      vim.api.nvim_buf_set_extmark(self.buf, ns_id, row, 0, {
+        virt_text = { { status, "FsTitle" } },
+        virt_text_pos = "inline",
+        right_gravity = false,
+      })
 
     local texts = {}
     for _, text in ipairs({
       { format = "%-11s ", attr = line.mode, hl = "FsMode" },
-      { format = "%-" .. (self.max_user_width + 2) .. "s ", attr = line.username, hl = "FsUser" },
+      {
+        format = "%-" .. (self.max_user_width + 2) .. "s ",
+        attr = line.username,
+        hl = "FsUser",
+      },
       { format = "%-10s ", attr = line.size, hl = "FsSize" },
-      { format = "%-" .. (self.max_date_width + 2) .. "s ", attr = line.date, hl = "FsDate" },
+      {
+        format = "%-" .. (self.max_date_width + 2) .. "s ",
+        attr = line.date,
+        hl = "FsDate",
+      },
     }) do
       if text.attr then
         table.insert(texts, { (text.format):format(text.attr), text.hl })
@@ -515,12 +565,17 @@ function fsb:event_watch()
           local search_words = text:sub(#path + 1)
           if self.cfg.search.cmd == "none" then
             self:search_builtin(search_words)
-          elseif self.cfg.search.cmd == "fd" or self.cfg.search.cmd == "fzf-fd" then
+          elseif
+            self.cfg.search.cmd == "fd" or self.cfg.search.cmd == "fzf-fd"
+          then
             if self.search_job then
               self.search_job:kill(9)
             end
             self.search_id = self.search_id + 1
-            self.search_job = self:search_with_cmd(search_words, (path:gsub("~", vim.env.HOME)))
+            self.search_job = self:search_with_cmd(
+              search_words,
+              (path:gsub("~", vim.env.HOME))
+            )
           end
         end
       elseif not vim.tbl_isempty(self.edit.texts) then
