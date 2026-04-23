@@ -31,7 +31,24 @@ local replace = function(new_char)
   return start_row, end_row
 end
 
+local function IsComplexKey(str)
+  local s = str:lower()
+  if
+    s:find("<c%-", 1, false)
+    or s:find("<m%-", 1, false)
+    or s:find("<a%-", 1, false)
+  then
+    return true
+  else
+    return false
+  end
+end
+
 function keymaps:setup()
+  local sort_mode = { "n" }
+  if IsComplexKey(self.cfg.keymap.sort) then
+    table.insert(sort_mode, "i")
+  end
   local t = {
     -- visual block
     {
@@ -396,7 +413,7 @@ function keymaps:setup()
         end)
         self:update_buffer_render()
       end,
-      mode = "n",
+      mode = sort_mode,
       key = self.cfg.keymap.sort,
       opts = { noremap = true, buffer = true },
     },
