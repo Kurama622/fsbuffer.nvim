@@ -16,5 +16,6 @@ return {
     enter_parent_dir = "<backspace>",
     open = "<cr>",
     close = "<esc>",
+    sort = "S",
   },
 }

@@ -268,15 +268,12 @@ function keymaps:setup()
 
           local start_row, end_row = actions:range()
           for i = start_row, end_row, 1 do
-            table.insert(
-              self.cut_list,
-              {
-                path = self.cwd,
-                name = self.lines[i - 1].name,
-                ["type"] = self.lines[i - 1].type,
-                idx = i - 1,
-              }
-            )
+            table.insert(self.cut_list, {
+              path = self.cwd,
+              name = self.lines[i - 1].name,
+              ["type"] = self.lines[i - 1].type,
+              idx = i - 1,
+            })
             self.lines[i - 1].dired = true
           end
 
@@ -315,14 +312,11 @@ function keymaps:setup()
         self.action = "yank"
         local start_row, end_row = actions:range()
         for i = start_row, end_row, 1 do
-          table.insert(
-            self.yank_list,
-            {
-              path = self.cwd,
-              name = self.lines[i - 1].name,
-              ["type"] = self.lines[i - 1].type,
-            }
-          )
+          table.insert(self.yank_list, {
+            path = self.cwd,
+            name = self.lines[i - 1].name,
+            ["type"] = self.lines[i - 1].type,
+          })
         end
         return "y"
       end,
@@ -361,14 +355,11 @@ function keymaps:setup()
                   :gsub("%s+$", "")
               )
               if new_text ~= self.lines[i].name then
-                table.insert(
-                  self.cut_list,
-                  {
-                    path = self.cwd,
-                    name = self.lines[i].name,
-                    ["type"] = self.lines[i].type,
-                  }
-                )
+                table.insert(self.cut_list, {
+                  path = self.cwd,
+                  name = self.lines[i].name,
+                  ["type"] = self.lines[i].type,
+                })
                 actions:rename(
                   self.cut_list,
                   i,
@@ -406,7 +397,7 @@ function keymaps:setup()
         self:update_buffer_render()
       end,
       mode = "n",
-      key = "S",
+      key = self.cfg.keymap.sort,
       opts = { noremap = true, buffer = true },
     },
 
